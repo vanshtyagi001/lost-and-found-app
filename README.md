@@ -1,120 +1,146 @@
-# lost-and-found-app
-An AI Based Lost and Found System
+# AI-Powered Lost and Found Platform
 
-# FoundIt AI - Build-A-Thon Submission 🚀
+[![Python Version](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
+[![Flask Version](https://img.shields.io/badge/flask-3.0.x-orange.svg)](https://flask.palletsprojects.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) <!-- Choose appropriate license -->
 
-[![Hackathon Badge](https://img.shields.io/badge/Hackathon-Build--A--Thon-blueviolet)](<Your Hackathon Link - Optional>)
+A web-based platform that helps reunite lost items with their owners using AI image analysis powered by Google's Gemini API.
 
-**FoundIt AI** is an intelligent web-based platform designed to reunite lost items with their owners using the power of AI image analysis. Built for the **Build-A-Thon** hackathon, this platform leverages the Google Gemini 1.5 Flash API to analyze images, generate descriptions, and intelligently match lost and found items.
+## Core Features
 
-![FoundIt AI Concept Image](<Optional: Link to a screenshot or logo>)
+*   **Report Found Items:** Users who find an item can upload a photo. The Gemini API automatically generates a description. Users add details like item type, color, brand, location found, and contact information.
+*   **Search Lost Items:** Users who lost an item can upload a photo (of the item or a similar one). Gemini generates a description. Users provide details like item type, color, brand, and last known location.
+*   **Intelligent Matching:** A three-tiered algorithm compares lost and found items:
+    1.  **Description Matching:** Semantic similarity between AI-generated descriptions (using Gemini).
+    2.  **Metadata Matching:** Compares item type, color, brand, and basic location proximity.
+    3.  **Image Comparison:** Visual similarity analysis between images (using Gemini).
+*   **Match Results:** Displays potential matches with details, images, finder contact info, and a confidence score.
 
----
+## Technologies Used
 
-## 🌟 Core Problem & Solution
+*   **Backend:** Python, Flask
+*   **Database:** SQLite (for development/simplicity)
+*   **AI:** Google Gemini API (`gemini-1.5-flash-latest` model via `google-generativeai` SDK)
+    *   Image Description Generation
+    *   Semantic Text Similarity
+    *   Visual Image Similarity
+*   **Frontend:** HTML, Jinja2 Templates, CSS (Bootstrap optionally used for basic styling)
+*   **Image Processing:** Pillow (PIL Fork)
 
-Losing personal belongings is stressful. Traditional lost and found methods (physical bins, basic online forums) are often inefficient. FoundIt AI aims to significantly improve the process by:
+## Project Structure
+lost-and-found-app/
+├── app.py # Main Flask application logic, routes, API calls
+├── models.py # SQLAlchemy database models (Item table)
+├── config.py # Configuration (API keys, DB URI, thresholds) - IMPORTANT: Keep keys secure!
+├── requirements.txt # Python dependencies
+├── static/ # Static files (CSS, JS, etc.)
+│ └── css/
+│ └── style.css
+├── templates/ # HTML templates (Jinja2)
+│ ├── base.html
+│ ├── index.html
+│ ├── report_found.html
+│ ├── search_lost.html
+│ └── results.html
+├── uploads/ # Directory for storing uploaded images (gitignore recommended)
+├── .env.example # Example for environment variables (Recommended for API keys)
+├── .gitignore # Specifies intentionally untracked files git should ignore
+└── README.md # This file
+## Setup and Installation
 
-1.  **Automating Item Description:** Using AI to generate objective descriptions from images, reducing reliance on subjective user input.
-2.  **Intelligent Matching:** Employing a multi-tiered approach combining text semantics, metadata, and visual similarity for more accurate matches.
-3.  **Streamlining Connection:** Providing a centralized platform for finders and losers to connect more easily.
+1.  **Clone the Repository:**
+    ```bash
+    git clone https://github.com/YOUR_USERNAME/lost-and-found-app.git
+    cd lost-and-found-app
+    ```
 
----
+2.  **Create a Virtual Environment:** (Recommended)
+    ```bash
+    python -m venv .venv
+    # On Windows
+    .\.venv\Scripts\activate
+    # On macOS/Linux
+    source .venv/bin/activate
+    ```
 
-## ✨ Key Features
+3.  **Install Dependencies:**
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-*   **Report Found Items:**
-    *   Upload a photo of the found item.
-    *   🤖 **AI Analysis:** Gemini 1.5 Flash generates a detailed description.
-    *   Provide additional details (Type, Color, Brand, Location Found).
-    *   Securely store item information and (privacy-controlled) contact details.
-*   **Report Lost Items:**
-    *   Upload a photo of the lost item (or a similar reference image).
-    *   🤖 **AI Analysis:** Gemini 1.5 Flash generates a description.
-    *   Provide details (Type, Color, Brand, Last Known Location).
-    *   Securely store item information and contact details.
-*   **🧠 AI-Powered Matching Algorithm:** A three-tiered system identifies potential matches:
-    1.  **Description Matching (≥40%):** Compares AI-generated descriptions using Gemini for semantic similarity.
-    2.  **Metadata Matching (≥50%):** Compares structured data (Type, Color, Brand, Location Proximity).
-    3.  **Image Comparison (≥80%):** Compares actual images using Gemini 1.5 Flash for visual similarity analysis on items passing the first two tiers.
-*   **View Potential Matches:**
-    *   Displays potential matches for lost items.
-    *   Includes found item image, details, and match confidence score.
-    *   Provides finder's contact information (with privacy controls).
-*   **User-Friendly Interface:** Simple forms for reporting and clear display of results.
+4.  **Configure API Keys:**
+    *   **Option A (Recommended): Environment Variables**
+        *   Create a file named `.env` in the project root.
+        *   Copy the contents of `.env.example` into `.env`.
+        *   Replace the placeholder values in `.env` with your actual Google AI Studio API keys:
+            ```dotenv
+            # .env file
+            GEMINI_TEXT_API_KEY=AIzaSyAGgQ12y7ytWNUqjWdjnm6Va1iJFpb5f4c_YOUR_REAL_KEY
+            GEMINI_IMAGE_API_KEY=AIzaSyDyfUFysP_nUUmUPFHwq9APuzLsT04qeVY_YOUR_REAL_KEY
+            FLASK_SECRET_KEY=your_strong_random_secret_key_here # Generate a strong secret key
+            ```
+        *   Modify `config.py` to load keys from environment variables (see comments within `config.py` for example using `os.environ.get()`).
+    *   **Option B (Simpler, Less Secure): Edit `config.py` directly**
+        *   Open `config.py`.
+        *   Replace the placeholder strings for `GEMINI_TEXT_API_KEY` and `GEMINI_IMAGE_API_KEY` with your actual keys.
+        *   **WARNING:** Do not commit your actual API keys directly into public repositories if using this method. Add `config.py` to your `.gitignore` file if you put real keys in it.
+        *   Also set a strong `SECRET_KEY` in `config.py`.
 
----
+5.  **(Optional) Configure Matching Thresholds:** Adjust the threshold values in `config.py` if needed:
+    ```python
+    DESCRIPTION_SIMILARITY_THRESHOLD = 0.40
+    METADATA_SIMILARITY_THRESHOLD = 0.50
+    IMAGE_SIMILARITY_THRESHOLD = 0.80
+    ```
 
-## ⚙️ How It Works - The AI Magic
+6.  **Run the Application:**
+    ```bash
+    flask run
+    # or
+    python app.py
+    ```
 
-The core intelligence lies in the integration with the **Google Gemini 1.5 Flash API**:
+7.  **Access the Platform:** Open your web browser and navigate to `http://127.0.0.1:5000` (or the address provided by Flask).
 
-1.  **Image -> Description:** When an image is uploaded (lost or found), it's sent to the Gemini API with a prompt asking for a detailed description relevant for identification.
-    *   *Model Used:* `gemini-1.5-flash-latest`
-    *   *API Key Group:* Text/Other (`AIzaSyAGgQ...`)
-2.  **Description Similarity:** To compare two items based on their AI-generated descriptions, the descriptions are sent back to the Gemini API with a prompt asking it to calculate their semantic similarity score (0-100).
-    *   *Model Used:* `gemini-1.5-flash-latest`
-    *   *API Key Group:* Text/Other (`AIzaSyAGgQ...`)
-3.  **Image Similarity:** For items that pass the description and metadata checks, their actual images are sent to the Gemini API (as multimodal input) with a prompt asking it to assess the visual similarity and likelihood of being the *same* object, returning a score (0-100).
-    *   *Model Used:* `gemini-1.5-flash-latest`
-    *   *API Key Group:* Image Comparison (`AIzaSyDyfU...`)
+## Important Considerations
 
-This tiered approach ensures efficiency (computationally cheaper text/metadata checks first) and accuracy (detailed visual check for promising candidates).
+*   **API Key Security:** **Never** commit your API keys directly to Git. Use environment variables (`.env` file) and ensure `.env` is listed in your `.gitignore` file.
+*   **Database:** SQLite is used for simplicity. For production or larger scale, consider migrating to PostgreSQL or MySQL. Use `Flask-Migrate` for managing database schema changes.
+*   **Error Handling:** Production applications need more robust error handling and logging.
+*   **Security:** Implement proper input validation/sanitization (especially for contact info), protect against common web vulnerabilities (XSS, CSRF), and consider user authentication/authorization.
+*   **Contact Info Privacy:** The current implementation directly displays finder contact info. In a real-world app, implement masking or an internal messaging system to protect user privacy.
+*   **Location Matching:** The current location matching is based on simple text comparison. For accurate proximity matching, integrate geospatial libraries (like Geopy) and calculate distances.
+*   **Performance:** For large numbers of items, matching can be slow due to API calls. Consider optimizations like database pre-filtering, asynchronous processing (asyncio/Celery), or pre-computing image embeddings for faster similarity search.
+*   **Deployment:** Use a production-ready WSGI server (like Gunicorn or Waitress) instead of the Flask development server for deployment.
 
----
+## Contributing
 
-## 🚶 Example User Flow (Lost Watch)
+Contributions are welcome! Please feel free to submit a Pull Request or open an Issue.
 
-1.  **User Loses Watch:** User realizes their Timex watch is missing, last seen in Central Park.
-2.  **Report Lost Item:**
-    *   User navigates to the "Report Lost Item" page on FoundIt AI.
-    *   Uploads a photo of an identical/similar Timex watch.
-    *   🤖 AI generates: "Silver analog wristwatch with brown leather band, circular face."
-    *   User adds/confirms details: Type: `Watch`, Color: `Silver`, Brand: `Timex`, Location: `Central Park`, Contact: `user@email.com`.
-    *   Information is saved to the database.
-3.  **Matching Process:** The system automatically compares the new lost item report against the database of found items using the three-tiered algorithm.
-4.  **Potential Match Found:** Another user previously found a watch matching the criteria:
-    *   Description Similarity: 75% (>40%)
-    *   Metadata Similarity: (Type=Match, Color=Match, Brand=Match, Location=Nearby) -> 80% (>50%)
-    *   Image Similarity: 92% (>80%)
-5.  **Results Display:** The user who lost the watch sees the found watch as a potential match, including its image, details, confidence score (e.g., 85%), and a button to reveal the finder's contact information.
+Before Committing:
+Create .gitignore: Make sure you have a .gitignore file in your project root. Add entries like:
+# Python
+*.pyc
+__pycache__/
+.venv/
+instance/
+*.sqlite
+*.db
+*.db-journal # SQLite temporary files
 
----
+# Config / Secrets
+.env
+# config.py # Add this ONLY if you put real secrets directly in config.py
 
-## 🛠️ Technology Stack
+# Uploads (Usually don't commit user uploads)
+uploads/
 
-*   **Frontend:** [Specify: e.g., React, Vue, HTML/CSS/JS]
-*   **Backend:** [Specify: e.g., Node.js/Express, Python/Flask]
-*   **Database:** [Specify: e.g., PostgreSQL, MySQL, MongoDB]
-*   **AI:** Google Gemini 1.5 Flash API (`gemini-1.5-flash-latest`)
-*   **Image Storage:** [Specify: e.g., Google Cloud Storage, AWS S3, Cloudinary]
-*   **Deployment:** [Specify where it's hosted, e.g., Google Cloud Run, Vercel, Heroku, Local]
+# IDE / OS files
+.idea/
+.vscode/
+*.DS_Store
 
----
-
-## 🔑 API Keys & Configuration
-
-**IMPORTANT:** This project requires API keys for the Google Gemini API.
-
-*   The specific keys used during the hackathon were provided in the prompt:
-    *   Image Comparison Key: `AIzaSyDyfUFysP_nUUmUPFHwq9APuzLsT04qeVY` (Example Only)
-    *   Text/Other Key: `AIzaSyAGgQ12y7ytWNUqjWdjnm6Va1iJFpb5f4c` (Example Only)
-*   **DO NOT COMMIT YOUR ACTUAL API KEYS TO GITHUB.**
-*   Store your keys securely using environment variables. Create a `.env` file in the root of the backend directory (and add `.env` to your `.gitignore` file):
-
-```bash
-# .env file format
-
-# For Gemini API interactions (text generation, description similarity)
-GEMINI_API_KEY_TEXT_OTHER=<Your_Text_Other_API_Key>
-
-# For Gemini API interactions (image similarity comparison)
-GEMINI_API_KEY_IMAGE_COMPARISON=<Your_Image_Comparison_API_Key>
-
-# Database Connection String/Credentials
-DATABASE_URL=<Your_Database_Connection_String>
-
-# Cloud Storage Credentials (if applicable)
-GCS_BUCKET_NAME=<Your_Bucket_Name>
-GCS_PROJECT_ID=<Your_Project_ID>
-# Add other necessary credentials as needed
+Create .env.example: Create this file with placeholder keys as shown in the README.
+Add a License File: If you choose a license like MIT, create a LICENSE.md file and paste the standard MIT license text into it.
+Replace Placeholders: Change YOUR_USERNAME in the git clone command to your actual GitHub username.
+Review: Read through the generated README and adjust any details specific to your final implementation.
