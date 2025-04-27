@@ -10,8 +10,8 @@ import os
 
 # Using the placeholder keys from the prompt for structure:
 # Replace these with your real keys! DO NOT COMMIT REAL KEYS TO GIT!
-GEMINI_TEXT_API_KEY = "AIzaSyAGgQ12y7ytWNUqjWdjnm6Va1iJFpb5f4c" # For description generation & text similarity
-GEMINI_IMAGE_API_KEY = "AIzaSyDyfUFysP_nUUmUPFHwq9APuzLsT04qeVY" # For image visual similarity
+GEMINI_TEXT_API_KEY = "YOUR API KEY" # For description generation & text similarity
+GEMINI_IMAGE_API_KEY = "YOUR API KEY" # For image visual similarity
 
 # --- App Configuration ---
 SECRET_KEY = os.urandom(24) # Replace with a fixed, strong secret key for production
