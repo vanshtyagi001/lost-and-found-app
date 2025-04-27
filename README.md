@@ -28,6 +28,7 @@ A web-based platform that helps reunite lost items with their owners using AI im
 *   **Image Processing:** Pillow (PIL Fork)
 
 ## Project Structure
+```bash
 lost-and-found-app/
 ├── app.py # Main Flask application logic, routes, API calls
 ├── models.py # SQLAlchemy database models (Item table)
@@ -47,10 +48,11 @@ lost-and-found-app/
 ├── .gitignore # Specifies intentionally untracked files git should ignore
 └── README.md # This file
 ## Setup and Installation
+```
 
 1.  **Clone the Repository:**
     ```bash
-    git clone https://github.com/YOUR_USERNAME/lost-and-found-app.git
+    git clone https://github.com/vanshtyagi001/lost-and-found-app.git
     cd lost-and-found-app
     ```
 
@@ -119,6 +121,7 @@ Contributions are welcome! Please feel free to submit a Pull Request or open an 
 
 Before Committing:
 Create .gitignore: Make sure you have a .gitignore file in your project root. Add entries like:
+```bash
 # Python
 *.pyc
 __pycache__/
@@ -139,6 +142,7 @@ uploads/
 .idea/
 .vscode/
 *.DS_Store
+```
 
 Create .env.example: Create this file with placeholder keys as shown in the README.
 Add a License File: If you choose a license like MIT, create a LICENSE.md file and paste the standard MIT license text into it.
