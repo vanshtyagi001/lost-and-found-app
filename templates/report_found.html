@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <h2>Report a Found Item</h2>
+    <p>Upload a clear photo of the item you found. Our AI will help describe it.</p>
+
+    <form method="POST" enctype="multipart/form-data" action="{{ url_for('report_found') }}">
+        <div class="mb-3">
+            <label for="item_image" class="form-label">Item Image*</label>
+            <input type="file" class="form-control" id="item_image" name="item_image" accept="image/*" required>
+        </div>
+
+        <div class="mb-3">
+            <label for="item_type" class="form-label">Item Type*</label>
+            <select class="form-select" id="item_type" name="item_type" required>
+                <option value="" disabled selected>Select item type...</option>
+                {% for type in item_types %}
+                    <option value="{{ type }}">{{ type }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <label for="color" class="form-label">Color</label>
+                <input type="text" class="form-control" id="color" name="color" placeholder="e.g., Blue, Silver, Multicolor">
+            </div>
+            <div class="col-md-6">
+                <label for="brand" class="form-label">Brand (if known)</label>
+                <input type="text" class="form-control" id="brand" name="brand" placeholder="e.g., Apple, Timex, Nike">
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label for="location" class="form-label">Location Found*</label>
+            <input type="text" class="form-control" id="location" name="location" placeholder="e.g., Central Park Bench, Library Room 201" required>
+        </div>
+
+        <div class="mb-3">
+            <label for="contact_info" class="form-label">Your Contact Information* (Email or Phone)</label>
+            <input type="text" class="form-control" id="contact_info" name="contact_info" placeholder="How someone can contact you" required>
+             <div class="form-text text-danger">Warning: This contact information will be shared with potential owners if a match is found.</div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Report Found Item</button>
+    </form>
+{% endblock %}

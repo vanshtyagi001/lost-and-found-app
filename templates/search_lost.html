@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <h2>Search for Your Lost Item</h2>
+    <p>Upload a photo of your lost item, or a similar reference image. Provide details to help narrow the search.</p>
+
+    <form method="POST" enctype="multipart/form-data" action="{{ url_for('search_lost') }}">
+        <div class="mb-3">
+            <label for="item_image" class="form-label">Lost Item Image (or reference)*</label>
+            <input type="file" class="form-control" id="item_image" name="item_image" accept="image/*" required>
+        </div>
+
+        <div class="mb-3">
+            <label for="item_type" class="form-label">Item Type*</label>
+            <select class="form-select" id="item_type" name="item_type" required>
+                <option value="" disabled selected>Select item type...</option>
+                 {% for type in item_types %}
+                    <option value="{{ type }}">{{ type }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+         <div class="row mb-3">
+            <div class="col-md-6">
+                <label for="color" class="form-label">Color</label>
+                <input type="text" class="form-control" id="color" name="color" placeholder="e.g., Black, Red, Gold">
+            </div>
+            <div class="col-md-6">
+                <label for="brand" class="form-label">Brand (if applicable)</label>
+                <input type="text" class="form-control" id="brand" name="brand" placeholder="e.g., Samsung, Fossil, Jansport">
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label for="location" class="form-label">Last Known Location*</label>
+            <input type="text" class="form-control" id="location" name="location" placeholder="e.g., Main Street Cafe, City Bus Route 5" required>
+        </div>
+
+         <div class="mb-3">
+            <label for="contact_info_search" class="form-label">Your Contact Information (Optional - For Record)</label>
+            <input type="text" class="form-control" id="contact_info_search" name="contact_info_search" placeholder="Optional: email@example.com">
+             <div class="form-text">This is just for your reference if needed, it's not directly used for matching.</div>
+        </div>
+
+
+        <button type="submit" class="btn btn-success">Search for Matches</button>
+    </form>
+{% endblock %}

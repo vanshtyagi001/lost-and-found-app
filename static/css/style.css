@@ -1,0 +1,28 @@
+body {
+    padding-top: 56px; /* Adjust based on navbar height */
+    padding-bottom: 60px; /* Space for footer */
+}
+
+.container {
+    max-width: 960px;
+}
+
+.card-img-top {
+    width: 100%;
+    /* Maintain aspect ratio, prevent stretching */
+    /* max-height set inline in template for easier control */
+    object-fit: contain;
+    background-color: #f8f9fa; /* Light background for images */
+}
+
+footer {
+    padding: 20px 0;
+    background-color: #f8f9fa; /* Light grey background */
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+}
+
+.alert {
+    margin-top: 1rem;
+}
