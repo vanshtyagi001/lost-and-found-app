@@ -1,0 +1,7 @@
+Flask
+Flask-SQLAlchemy
+google-generativeai
+Pillow
+python-dotenv  # Good practice, though keys are in config.py for this example
+werkzeug       # For secure filenames
+markdown-it-py # For rendering markdown formatting in AI descriptions

@@ -1,0 +1,45 @@
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Python cache and bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+
+# Environment and sensitive keys
+.env
+.env.local
+.env.*
+!.env.example
+
+# Local SQLite databases and instance folder
+instance/
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+
+# Uploaded assets (preserves folder structure via .gitkeep)
+uploads/*
+!uploads/.gitkeep
+
+# Archives and binaries
+*.zip
+*.tar.gz
+*.rar
+
+# Testing and scratch scripts
+minimal_test.py
+test_app.py
+
+# IDE and operating system files
+.vscode/
+.idea/
+*.DS_Store
+Thumbs.db
