@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <div class="px-4 py-5 my-5 text-center">
+        <h1 class="display-5 fw-bold">Welcome to AI Lost & Found</h1>
+        <div class="col-lg-6 mx-auto">
+            <p class="lead mb-4">Use the power of AI image analysis to reunite lost items with their owners. Report items you've found or search for items you've lost.</p>
+            <div class="d-grid gap-2 d-sm-flex justify-content-sm-center">
+                <a href="{{ url_for('report_found') }}" class="btn btn-primary btn-lg px-4 gap-3">Report a Found Item</a>
+                <a href="{{ url_for('search_lost') }}" class="btn btn-outline-secondary btn-lg px-4">Search for a Lost Item</a>
+            </div>
+        </div>
+    </div>
+{% endblock %}
