@@ -1,47 +1,67 @@
 {% extends 'base.html' %}
 
 {% block content %}
-    <h2>Report a Found Item</h2>
-    <p>Upload a clear photo of the item you found. Our AI will help describe it.</p>
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <h2 class="h3 fw-bold text-main mb-2">Report a Found Item</h2>
+        <p class="text-muted mb-4">Upload a clear photo of the item you found with location and contact details.</p>
 
-    <form method="POST" enctype="multipart/form-data" action="{{ url_for('report_found') }}">
-        <div class="mb-3">
-            <label for="item_image" class="form-label">Item Image*</label>
-            <input type="file" class="form-control" id="item_image" name="item_image" accept="image/*" required>
-        </div>
-
-        <div class="mb-3">
-            <label for="item_type" class="form-label">Item Type*</label>
-            <select class="form-select" id="item_type" name="item_type" required>
-                <option value="" disabled selected>Select item type...</option>
-                {% for type in item_types %}
-                    <option value="{{ type }}">{{ type }}</option>
-                {% endfor %}
-            </select>
-        </div>
-
-        <div class="row mb-3">
-            <div class="col-md-6">
-                <label for="color" class="form-label">Color</label>
-                <input type="text" class="form-control" id="color" name="color" placeholder="e.g., Blue, Silver, Multicolor">
+        <form method="POST" enctype="multipart/form-data" action="{{ url_for('report_found') }}">
+            <div class="mb-3">
+                <label for="item_image" class="form-label fw-semibold">Item Image*</label>
+                <input type="file" class="form-control" id="item_image" name="item_image" accept="image/*" required>
+                
+                <!-- Image Preview -->
+                <div id="image_preview_container" class="mt-2 d-none">
+                    <div class="d-flex align-items-center gap-3 p-2 bg-white border rounded">
+                        <img id="image_preview" src="#" alt="Selected item preview" style="width: 72px; height: 72px; object-fit: cover; border-radius: 6px; border: 1px solid #e2e8f0;">
+                        <div class="flex-grow-1 text-truncate">
+                            <div id="image_preview_name" class="fw-semibold small text-truncate"></div>
+                            <div id="image_preview_size" class="text-muted small"></div>
+                        </div>
+                        <button type="button" id="remove_image_btn" class="btn btn-sm btn-outline-secondary" title="Remove selected image">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                </div>
             </div>
-            <div class="col-md-6">
-                <label for="brand" class="form-label">Brand (if known)</label>
-                <input type="text" class="form-control" id="brand" name="brand" placeholder="e.g., Apple, Timex, Nike">
+
+            <div class="mb-3">
+                <label for="item_type" class="form-label fw-semibold">Item Type*</label>
+                <select class="form-select" id="item_type" name="item_type" required>
+                    <option value="" disabled selected>Select item type...</option>
+                    {% for type in item_types %}
+                        <option value="{{ type }}">{{ type }}</option>
+                    {% endfor %}
+                </select>
             </div>
-        </div>
 
-        <div class="mb-3">
-            <label for="location" class="form-label">Location Found*</label>
-            <input type="text" class="form-control" id="location" name="location" placeholder="e.g., Central Park Bench, Library Room 201" required>
-        </div>
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="color" class="form-label fw-semibold">Color</label>
+                    <input type="text" class="form-control" id="color" name="color" placeholder="e.g., Blue, Silver, Multicolor">
+                </div>
+                <div class="col-md-6 mt-3 mt-md-0">
+                    <label for="brand" class="form-label fw-semibold">Brand (if known)</label>
+                    <input type="text" class="form-control" id="brand" name="brand" placeholder="e.g., Apple, Timex, Nike">
+                </div>
+            </div>
 
-        <div class="mb-3">
-            <label for="contact_info" class="form-label">Your Contact Information* (Email or Phone)</label>
-            <input type="text" class="form-control" id="contact_info" name="contact_info" placeholder="How someone can contact you" required>
-             <div class="form-text text-danger">Warning: This contact information will be shared with potential owners if a match is found.</div>
-        </div>
+            <div class="mb-3">
+                <label for="location" class="form-label fw-semibold">Location Found*</label>
+                <input type="text" class="form-control" id="location" name="location" placeholder="e.g., Central Park Bench, Library Room 201" required>
+            </div>
 
-        <button type="submit" class="btn btn-primary" data-loading-text="Analyzing Image & Submitting...">Report Found Item</button>
-    </form>
+            <div class="mb-4">
+                <label for="contact_info" class="form-label fw-semibold">Your Contact Information* (Email or Phone)</label>
+                <input type="text" class="form-control" id="contact_info" name="contact_info" placeholder="How someone can contact you" required>
+                <div class="form-text text-muted">
+                    <i class="bi bi-lock me-1"></i> This contact information is only shared with potential owners when a confirmed match is found.
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary px-4 py-2" data-loading-text="Submitting Report...">Report Found Item</button>
+        </form>
+    </div>
+</div>
 {% endblock %}
