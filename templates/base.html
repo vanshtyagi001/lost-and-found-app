@@ -3,42 +3,74 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Lost & Found</title>
-    <!-- Add Bootstrap for basic styling (optional) -->
+    <title>Lost & Found Portal</title>
+
+    <!-- Favicons -->
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/favicon.svg') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='img/favicon.png') }}">
+    <link rel="icon" href="{{ url_for('static', filename='img/favicon.ico') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/logo.png') }}">
+
+    <!-- Clean Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+    <!-- Application Styles -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="{{ url_for('index') }}">AI Lost & Found</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+    <!-- Top Navigation (Sticky) -->
+    <nav class="navbar navbar-expand-lg app-navbar sticky-top mb-4">
+        <div class="container">
+            <a class="navbar-brand d-flex align-items-center gap-2" href="{{ url_for('index') }}">
+                <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="Lost & Found Logo" width="30" height="30" class="d-inline-block">
+                <span>Lost & Found</span>
+            </a>
+            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
+                <ul class="navbar-nav me-auto ms-lg-3 gap-1">
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('report_found') }}">Report Found Item</a>
+                        <a class="nav-link {% if request.endpoint == 'report_found' %}active{% endif %}" href="{{ url_for('report_found') }}">
+                            Report Found Item
+                        </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('search_lost') }}">Search for Lost Item</a>
+                        <a class="nav-link {% if request.endpoint == 'search_lost' %}active{% endif %}" href="{{ url_for('search_lost') }}">
+                            Search Lost Items
+                        </a>
                     </li>
                 </ul>
                 <ul class="navbar-nav">
                     <li class="nav-item">
-                        <a class="nav-link text-secondary" href="{{ url_for('admin') }}">Admin</a>
+                        <a class="nav-link admin-link {% if request.endpoint == 'admin' %}active{% endif %}" href="{{ url_for('admin') }}">
+                            Admin
+                        </a>
                     </li>
                 </ul>
             </div>
         </div>
     </nav>
 
-    <div class="container">
+    <!-- Main Content Container -->
+    <main class="container my-3 flex-grow-1">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
                     <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                        {{ message | render_markdown }}
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="flex-grow-1">
+                                {{ message | render_markdown }}
+                            </div>
+                        </div>
                         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                     </div>
                 {% endfor %}
@@ -46,21 +78,88 @@
         {% endwith %}
 
         {% block content %}{% endblock %}
-    </div>
+    </main>
 
-    <!-- <footer class="mt-5 text-center text-muted">
-        <p>© {{ now().year }} AI Lost & Found Platform</p>
-    </footer> -->
+    <!-- Clean Footer -->
+    <footer class="app-footer">
+        <div class="container d-flex flex-column flex-sm-row justify-content-between align-items-center gap-2">
+            <div>
+                © {{ now().year }} Lost & Found Portal
+            </div>
+            <div class="text-muted small">
+                Community Property Recovery Platform
+            </div>
+        </div>
+    </footer>
 
-    <!-- Add Bootstrap JS (optional) -->
+    <!-- Bootstrap 5 Bundle JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Image Upload Preview Handler -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var fileInputs = document.querySelectorAll('input[type="file"][accept*="image"]');
+            var currentObjectUrl = null;
+
+            fileInputs.forEach(function (input) {
+                var container = document.getElementById('image_preview_container');
+                var img = document.getElementById('image_preview');
+                var nameEl = document.getElementById('image_preview_name');
+                var sizeEl = document.getElementById('image_preview_size');
+                var removeBtn = document.getElementById('remove_image_btn');
+
+                if (!container || !img) return;
+
+                input.addEventListener('change', function () {
+                    var file = this.files && this.files[0];
+                    if (file) {
+                        if (file.type && !file.type.startsWith('image/')) {
+                            alert('Please select an image file (PNG, JPG, JPEG, GIF).');
+                            this.value = '';
+                            container.classList.add('d-none');
+                            return;
+                        }
+
+                        if (currentObjectUrl) {
+                            URL.revokeObjectURL(currentObjectUrl);
+                        }
+                        currentObjectUrl = URL.createObjectURL(file);
+                        img.src = currentObjectUrl;
+
+                        if (nameEl) nameEl.textContent = file.name;
+                        if (sizeEl) {
+                            var sizeKB = (file.size / 1024).toFixed(1);
+                            var sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+                            sizeEl.textContent = file.size >= 1048576 ? (sizeMB + ' MB') : (sizeKB + ' KB');
+                        }
+                        container.classList.remove('d-none');
+                    } else {
+                        container.classList.add('d-none');
+                    }
+                });
+
+                if (removeBtn) {
+                    removeBtn.addEventListener('click', function () {
+                        input.value = '';
+                        container.classList.add('d-none');
+                        if (currentObjectUrl) {
+                            URL.revokeObjectURL(currentObjectUrl);
+                            currentObjectUrl = null;
+                        }
+                        img.src = '#';
+                        if (nameEl) nameEl.textContent = '';
+                        if (sizeEl) sizeEl.textContent = '';
+                    });
+                }
+            });
+        });
+    </script>
 
     <!-- Global Form Submit Loading Spinner -->
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             document.querySelectorAll('form').forEach(function (form) {
                 form.addEventListener('submit', function (e) {
-                    // Only trigger if browser validation passes
                     if (!this.checkValidity()) {
                         return;
                     }
