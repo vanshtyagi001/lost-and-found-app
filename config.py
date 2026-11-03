@@ -14,10 +14,11 @@ DATABASE_URI = 'sqlite:///items.db'
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
-# --- Matching Thresholds ---
-DESCRIPTION_SIMILARITY_THRESHOLD = 0.40
-METADATA_SIMILARITY_THRESHOLD = 0.50
-IMAGE_SIMILARITY_THRESHOLD = 0.80
+# --- Matching Thresholds (Configurable via .env with fallback defaults) ---
+DESCRIPTION_SIMILARITY_THRESHOLD = float(os.environ.get("DESCRIPTION_SIMILARITY_THRESHOLD", 0.40))
+METADATA_SIMILARITY_THRESHOLD = float(os.environ.get("METADATA_SIMILARITY_THRESHOLD", 0.50))
+IMAGE_SIMILARITY_THRESHOLD = float(os.environ.get("IMAGE_SIMILARITY_THRESHOLD", 0.80))
 
-# --- Gemini Model ---
+# --- Gemini Model Configuration ---
 GEMINI_MODEL_NAME = os.environ.get("GEMINI_MODEL_NAME", "gemini-3.1-flash-lite")
+GEMINI_TEMPERATURE = float(os.environ.get("GEMINI_TEMPERATURE", 0.2))

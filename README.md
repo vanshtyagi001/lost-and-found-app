@@ -174,8 +174,9 @@ GEMINI_IMAGE_API_KEY=your_gemini_api_key_here
 # Flask secret key for session signing
 FLASK_SECRET_KEY=generate_a_random_secret_key_here
 
-# Optional: Override default Gemini model
+# Optional: Override default Gemini model and temperature
 GEMINI_MODEL_NAME=gemini-3.1-flash-lite
+GEMINI_TEMPERATURE=0.2
 ```
 
 ### 5. Start the Application Server
@@ -200,6 +201,7 @@ Matching thresholds and application constants can be customized in `config.py` o
 | `METADATA_SIMILARITY_THRESHOLD` | `0.50` | Minimum score required in Tier 2 to proceed to image check |
 | `IMAGE_SIMILARITY_THRESHOLD` | `0.80` | Minimum visual confidence in Tier 3 to declare a match |
 | `GEMINI_MODEL_NAME` | `gemini-3.1-flash-lite` | Gemini model variant used for generation and inference |
+| `GEMINI_TEMPERATURE` | `0.2` | Sampling temperature for generation and similarity scoring |
 | `MAX_CONTENT_LENGTH` | `16 MB` | Maximum allowed file upload size |
 
 ---

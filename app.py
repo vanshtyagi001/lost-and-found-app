@@ -12,7 +12,7 @@ from datetime import datetime
 try:
     from config import (
         GEMINI_TEXT_API_KEY, GEMINI_IMAGE_API_KEY, SECRET_KEY, DATABASE_URI,
-        UPLOAD_FOLDER, ALLOWED_EXTENSIONS, GEMINI_MODEL_NAME,
+        UPLOAD_FOLDER, ALLOWED_EXTENSIONS, GEMINI_MODEL_NAME, GEMINI_TEMPERATURE,
         DESCRIPTION_SIMILARITY_THRESHOLD, METADATA_SIMILARITY_THRESHOLD,
         IMAGE_SIMILARITY_THRESHOLD
     )
@@ -66,9 +66,10 @@ except Exception as e:
 text_model = None
 vision_model = None
 try:
-    text_model = genai.GenerativeModel(GEMINI_MODEL_NAME)
-    vision_model = genai.GenerativeModel(GEMINI_MODEL_NAME) # Assumes same model okay
-    print(f"Gemini models ('{GEMINI_MODEL_NAME}') initialized successfully.")
+    generation_config = {"temperature": GEMINI_TEMPERATURE}
+    text_model = genai.GenerativeModel(GEMINI_MODEL_NAME, generation_config=generation_config)
+    vision_model = genai.GenerativeModel(GEMINI_MODEL_NAME, generation_config=generation_config) # Assumes same model okay
+    print(f"Gemini models ('{GEMINI_MODEL_NAME}', temp={GEMINI_TEMPERATURE}) initialized successfully.")
 except Exception as e:
      print(f"ERROR creating Gemini models ('{GEMINI_MODEL_NAME}'): {e}. AI features will likely fail.")
 print("--- Finished Gemini API Configuration Attempt ---")
