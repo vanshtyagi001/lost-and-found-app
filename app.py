@@ -418,7 +418,6 @@ def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not session.get('admin_logged_in'):
-            flash('Administrator authentication required. Please sign in.', 'warning')
             next_url = request.full_path if request.method == 'GET' and not request.full_path.startswith('/admin/login') else None
             return redirect(url_for('admin_login', next=next_url))
         return f(*args, **kwargs)

@@ -491,17 +491,3 @@ body {
     color: var(--text-muted);
     font-size: 0.875rem;
 }
-
-/* --- Admin Authentication --- */
-.admin-auth-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: 12px;
-    background-color: var(--primary-subtle);
-    color: var(--primary);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.4rem;
-    border: 1px solid #dbeafe;
-}
