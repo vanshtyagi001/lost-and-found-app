@@ -10,8 +10,12 @@ GEMINI_IMAGE_API_KEY = os.environ.get("GEMINI_IMAGE_API_KEY") or os.environ.get(
 
 # --- App Configuration ---
 SECRET_KEY = os.environ.get("FLASK_SECRET_KEY") or os.urandom(24)
-DATABASE_URI = 'sqlite:///items.db'
-UPLOAD_FOLDER = 'uploads'
+DATABASE_URI = os.environ.get("DATABASE_URL", "sqlite:///items.db")
+# Render/Heroku compatibility fix for SQLAlchemy postgresql dialect
+if DATABASE_URI.startswith("postgres://"):
+    DATABASE_URI = DATABASE_URI.replace("postgres://", "postgresql://", 1)
+
+UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", "uploads")
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
 # --- Matching Thresholds (Configurable via .env with fallback defaults) ---

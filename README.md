@@ -60,12 +60,12 @@ flowchart TD
     B --> C[(Fetch All Found Items from DB)]
     
     subgraph Pipeline [Three-Tier Evaluation]
-        C --> D{Tier 1: Semantic Text Similarity}
-        D -- Score < 0.40 --> Skip1[Discard Item]
-        D -- Score >= 0.40 --> E{Tier 2: Metadata Heuristics}
+        C --> D{Tier 1: Metadata Heuristics<br/>(Instant Local Filter - 0 API Calls)}
+        D -- Score < 0.50 --> Skip1[Discard Item]
+        D -- Score >= 0.50 --> E{Tier 2: Semantic Text Similarity<br/>(Gemini Analysis)}
         
-        E -- Score < 0.50 --> Skip2[Discard Item]
-        E -- Score >= 0.50 --> F{Tier 3: Direct Visual Vision Match}
+        E -- Score < 0.40 --> Skip2[Discard Item]
+        E -- Score >= 0.40 --> F{Tier 3: Direct Visual Vision Match<br/>(Gemini Vision)}
         
         F -- Score < 0.80 --> Skip3[Discard Item]
         F -- Score >= 0.80 --> G[Calculate Weighted Confidence]
@@ -197,8 +197,8 @@ Matching thresholds and application constants can be customized in `config.py` o
 
 | Parameter | Default | Purpose |
 | :--- | :--- | :--- |
-| `DESCRIPTION_SIMILARITY_THRESHOLD` | `0.40` | Minimum score required in Tier 1 to proceed to metadata check |
-| `METADATA_SIMILARITY_THRESHOLD` | `0.50` | Minimum score required in Tier 2 to proceed to image check |
+| `METADATA_SIMILARITY_THRESHOLD` | `0.50` | Minimum score required in Tier 1 (local metadata pre-filter) to proceed to AI text check |
+| `DESCRIPTION_SIMILARITY_THRESHOLD` | `0.40` | Minimum score required in Tier 2 (Gemini text similarity) to proceed to image vision check |
 | `IMAGE_SIMILARITY_THRESHOLD` | `0.80` | Minimum visual confidence in Tier 3 to declare a match |
 | `GEMINI_MODEL_NAME` | `gemini-3.1-flash-lite` | Gemini model variant used for generation and inference |
 | `GEMINI_TEMPERATURE` | `0.2` | Sampling temperature for generation and similarity scoring |

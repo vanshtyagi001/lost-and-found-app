@@ -47,8 +47,15 @@ except Exception as e:
 try:
     db.init_app(app)
     print("SQLAlchemy initialized with app.")
+    # Ensure database tables and upload directory exist on startup (supports Gunicorn & local dev)
+    with app.app_context():
+        db.create_all()
+        print("Database tables initialized successfully.")
+    if not os.path.exists(app.config['UPLOAD_FOLDER']):
+        os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+        print(f"Created upload directory: {app.config['UPLOAD_FOLDER']}")
 except Exception as e:
-    print(f"CRITICAL ERROR: db.init_app(app) failed: {e}")
+    print(f"CRITICAL ERROR during app initialization: {e}")
     exit()
 
 # --- Gemini API Configuration ---
@@ -340,22 +347,27 @@ def search_lost():
                 match_scores = {"description": 0.0, "metadata": 0.0, "image": 0.0, "confidence": 0.0}
                 desc_similarity = 0.0; meta_similarity = 0.0; img_similarity = 0.0
 
-                # Tier 1: Description
-                if lost_item_details["ai_description"] and found_item.ai_description and "failed" not in found_item.ai_description.lower():
-                    desc_similarity = compare_descriptions_gemini(lost_item_details["ai_description"], found_item.ai_description)
-                    match_scores["description"] = desc_similarity
-                    print(f"  Desc Similarity: {desc_similarity:.2f} (Thresh: {DESCRIPTION_SIMILARITY_THRESHOLD})")
-                else: print("  Skipping description comparison (missing/failed).")
-
-                if desc_similarity < DESCRIPTION_SIMILARITY_THRESHOLD: print("  Skipping further checks (low desc similarity)."); continue
-
-                # Tier 2: Metadata
+                # Tier 1: Metadata Heuristics (Instant Local Pre-Filter - 0 API Calls)
                 found_item_meta = found_item.get_metadata()
                 meta_similarity = calculate_metadata_similarity(lost_item_details, found_item_meta)
                 match_scores["metadata"] = meta_similarity
                 print(f"  Meta Similarity: {meta_similarity:.2f} (Thresh: {METADATA_SIMILARITY_THRESHOLD})")
 
-                if meta_similarity < METADATA_SIMILARITY_THRESHOLD: print("  Skipping further checks (low meta similarity)."); continue
+                if meta_similarity < METADATA_SIMILARITY_THRESHOLD:
+                    print("  Skipping further checks (low metadata similarity - 0 API calls made).")
+                    continue
+
+                # Tier 2: Semantic Description Similarity (Gemini Text Check)
+                if lost_item_details["ai_description"] and found_item.ai_description and "failed" not in found_item.ai_description.lower():
+                    desc_similarity = compare_descriptions_gemini(lost_item_details["ai_description"], found_item.ai_description)
+                    match_scores["description"] = desc_similarity
+                    print(f"  Desc Similarity: {desc_similarity:.2f} (Thresh: {DESCRIPTION_SIMILARITY_THRESHOLD})")
+                else:
+                    print("  Skipping description comparison (missing/failed).")
+
+                if desc_similarity < DESCRIPTION_SIMILARITY_THRESHOLD:
+                    print("  Skipping further checks (low desc similarity).")
+                    continue
 
                 # Tier 3: Image
                 found_image_path = os.path.join(app.config['UPLOAD_FOLDER'], found_item.image_filename)
