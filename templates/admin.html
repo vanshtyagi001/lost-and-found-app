@@ -1,61 +1,150 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+<!-- Page Header -->
+<div class="d-flex justify-content-between align-items-start align-items-md-center mb-4 flex-column flex-md-row gap-3">
     <div>
-        <h2 class="mb-1">Developer Admin Dashboard</h2>
-        <p class="text-muted mb-0">Manage and delete listed lost & found items.</p>
+        <h1 class="h3 fw-bold text-main mb-1">Item Management</h1>
+        <p class="text-muted mb-0">Review, inspect, and moderate all reported items in the database.</p>
     </div>
-    <div class="d-flex gap-2 align-items-center">
-        <span class="badge bg-primary fs-6">Total Items: {{ items|length }}</span>
-        {% if items %}
-            <form action="{{ url_for('admin_clear_all') }}" method="POST" onsubmit="return confirm('WARNING: Are you sure you want to delete ALL items and images? This cannot be undone.');">
-                <button type="submit" class="btn btn-outline-danger btn-sm">
-                    Clear All Items
-                </button>
-            </form>
-        {% endif %}
-    </div>
+    {% if items %}
+        <div class="d-flex align-items-center gap-2">
+            <button type="button" class="btn btn-outline-danger btn-sm px-3" data-bs-toggle="modal" data-bs-target="#clearAllModal">
+                <i class="bi bi-trash3 me-1"></i> Clear All Records
+            </button>
+        </div>
+    {% endif %}
 </div>
 
 {% if items %}
-    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+    <!-- Statistics Summary -->
+    {% set found_count = items|selectattr('status', 'equalto', 'found')|list|length %}
+    {% set lost_count = items|selectattr('status', 'equalto', 'lost')|list|length %}
+    <div class="row g-3 mb-4">
+        <div class="col-sm-4">
+            <div class="admin-stat-card">
+                <div class="admin-stat-label">Total Records</div>
+                <div class="admin-stat-number">{{ items|length }}</div>
+            </div>
+        </div>
+        <div class="col-sm-4">
+            <div class="admin-stat-card">
+                <div class="admin-stat-label">Found Items</div>
+                <div class="admin-stat-number text-success">{{ found_count }}</div>
+            </div>
+        </div>
+        <div class="col-sm-4">
+            <div class="admin-stat-card">
+                <div class="admin-stat-label">Lost Inquiries</div>
+                <div class="admin-stat-number text-warning">{{ lost_count }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toolbar: Search, Filters & View Switcher -->
+    <div class="admin-toolbar mb-4">
+        <div class="row g-3 align-items-center">
+            <!-- Search Bar -->
+            <div class="col-md-5">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-white border-end-0 text-muted">
+                        <i class="bi bi-search"></i>
+                    </span>
+                    <input type="text" id="adminSearchInput" class="form-control border-start-0 ps-0" placeholder="Search by type, location, brand, contact...">
+                </div>
+            </div>
+
+            <!-- Status Filter Tabs -->
+            <div class="col-md-4">
+                <div class="d-flex gap-1 p-1 bg-light rounded" role="group">
+                    <button type="button" class="filter-tab-btn active status-filter-btn" data-status="all">
+                        All ({{ items|length }})
+                    </button>
+                    <button type="button" class="filter-tab-btn status-filter-btn" data-status="found">
+                        Found ({{ found_count }})
+                    </button>
+                    <button type="button" class="filter-tab-btn status-filter-btn" data-status="lost">
+                        Lost ({{ lost_count }})
+                    </button>
+                </div>
+            </div>
+
+            <!-- View Switcher (Grid / Table) -->
+            <div class="col-md-3 d-flex justify-content-md-end align-items-center gap-2">
+                <span id="itemCountDisplay" class="text-muted small me-1">Showing {{ items|length }} of {{ items|length }}</span>
+                <div class="btn-group btn-group-sm" role="group">
+                    <button type="button" id="gridToggleBtn" class="btn btn-outline-secondary active" title="Grid View">
+                        <i class="bi bi-grid"></i>
+                    </button>
+                    <button type="button" id="tableToggleBtn" class="btn btn-outline-secondary" title="Table View">
+                        <i class="bi bi-list-ul"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 1. Grid View (Cards) -->
+    <div id="adminGridView" class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mb-4">
         {% for item in items %}
-            <div class="col">
-                <div class="card h-100 shadow-sm border">
-                    <div class="position-relative">
+            <div class="col item-card-container" data-status="{{ item.status }}" data-search-content="{{ item.id }} {{ item.item_type|lower }} {{ item.location|lower }} {{ (item.brand or '')|lower }} {{ (item.color or '')|lower }} {{ item.contact_info|lower }}">
+                <div class="item-card">
+                    <!-- Clean Photo Container -->
+                    <div class="item-card-img-wrap">
                         <img src="{{ url_for('uploaded_file', filename=item.image_filename) }}" 
-                             class="card-img-top" 
-                             alt="{{ item.item_type }}" 
-                             style="max-height: 220px; object-fit: contain; background-color: #f8f9fa; padding: 10px;">
-                        <span class="badge bg-secondary position-absolute top-0 start-0 m-2">
-                            #{{ item.id }}
-                        </span>
-                        <span class="badge {% if item.status == 'found' %}bg-success{% else %}bg-warning text-dark{% endif %} position-absolute top-0 end-0 m-2">
-                            {{ item.status|capitalize }}
-                        </span>
+                             alt="{{ item.item_type }}"
+                             data-bs-toggle="modal"
+                             data-bs-target="#itemModal{{ item.id }}"
+                             style="cursor: pointer;"
+                             title="Click to view full image & details">
                     </div>
 
-                    <div class="card-body d-flex flex-column">
-                        <h5 class="card-title mb-2">{{ item.item_type }}</h5>
-                        <p class="card-text small mb-2">
-                            <strong>Location:</strong> {{ item.location }}<br>
-                            <strong>Color:</strong> {{ item.color or 'N/A' }} | <strong>Brand:</strong> {{ item.brand or 'N/A' }}<br>
-                            <strong>Contact:</strong> {{ item.contact_info }}<br>
-                            <strong>Reported:</strong> {{ item.timestamp.strftime('%Y-%m-%d %H:%M') if item.timestamp else 'N/A' }}
-                        </p>
+                    <!-- Card Body -->
+                    <div class="card-body p-3 d-flex flex-column">
+                        <!-- Top Meta Row: ID & Status -->
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-muted small">#{{ item.id }}</span>
+                            <span class="small fw-semibold {% if item.status == 'found' %}text-success{% else %}text-warning{% endif %}">
+                                {{ item.status|capitalize }}
+                            </span>
+                        </div>
 
-                        <div class="bg-light p-2 rounded mb-3 small flex-grow-1">
-                            <strong class="text-secondary d-block mb-1">AI Description:</strong>
-                            <div class="text-muted" style="max-height: 120px; overflow-y: auto;">
-                                {{ (item.ai_description or 'No AI description generated.') | render_markdown }}
+                        <!-- Title -->
+                        <h5 class="fw-bold text-main mb-2 fs-6">{{ item.item_type }}</h5>
+                        
+                        <!-- Metadata List -->
+                        <div class="text-muted small mb-2">
+                            <div class="mb-1 text-truncate">
+                                <i class="bi bi-geo-alt me-1 text-muted"></i>
+                                <span>{{ item.location }}</span>
+                            </div>
+                            <div class="mb-1 text-truncate">
+                                <i class="bi bi-tag me-1 text-muted"></i>
+                                <span>{{ item.brand or 'No brand' }} &middot; {{ item.color or 'Color N/A' }}</span>
+                            </div>
+                            <div class="mb-1 text-truncate">
+                                <i class="bi bi-person me-1 text-muted"></i>
+                                <span>{{ item.contact_info }}</span>
+                            </div>
+                            <div class="text-truncate">
+                                <i class="bi bi-calendar3 me-1 text-muted"></i>
+                                <span>{{ item.timestamp.strftime('%b %d, %Y %H:%M') if item.timestamp else 'N/A' }}</span>
                             </div>
                         </div>
 
-                        <div class="pt-2 border-top mt-auto">
-                            <form action="{{ url_for('admin_delete_item', item_id=item.id) }}" method="POST" onsubmit="return confirm('Are you sure you want to permanently delete Item #{{ item.id }} ({{ item.item_type }})?');">
-                                <button type="submit" class="btn btn-danger btn-sm w-100">
-                                    Delete Item
+                        <!-- Description Snippet (Clean Clamped) -->
+                        <div class="card-desc-clamp flex-grow-1" title="{{ item.ai_description or '' }}">
+                            {{ item.ai_description or 'No additional description recorded.' }}
+                        </div>
+
+                        <!-- Actions Bar -->
+                        <div class="d-flex gap-2 pt-2 border-top mt-auto">
+                            <button type="button" class="btn btn-outline-secondary btn-sm flex-grow-1" data-bs-toggle="modal" data-bs-target="#itemModal{{ item.id }}">
+                                Inspect
+                            </button>
+                            <form action="{{ url_for('admin_delete_item', item_id=item.id) }}" method="POST" onsubmit="return confirm('Permanently delete item #{{ item.id }} ({{ item.item_type }})?');">
+                                <button type="submit" class="btn btn-outline-danger btn-sm px-2" title="Delete Item">
+                                    <i class="bi bi-trash3"></i>
                                 </button>
                             </form>
                         </div>
@@ -64,18 +153,317 @@
             </div>
         {% endfor %}
     </div>
+
+    <!-- 2. Table View -->
+    <div id="adminTableView" class="table-responsive admin-table mb-4 d-none">
+        <table class="table table-hover align-middle mb-0">
+            <thead>
+                <tr>
+                    <th style="width: 56px;">Image</th>
+                    <th style="width: 65px;">ID</th>
+                    <th style="width: 95px;">Status</th>
+                    <th>Item & Details</th>
+                    <th>Location</th>
+                    <th>Contact</th>
+                    <th>Date</th>
+                    <th style="width: 100px;" class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                    <tr class="item-table-row" data-status="{{ item.status }}" data-search-content="{{ item.id }} {{ item.item_type|lower }} {{ item.location|lower }} {{ (item.brand or '')|lower }} {{ (item.color or '')|lower }} {{ item.contact_info|lower }}">
+                        <td>
+                            <img src="{{ url_for('uploaded_file', filename=item.image_filename) }}" 
+                                 class="admin-thumb" 
+                                 alt="{{ item.item_type }}"
+                                 data-bs-toggle="modal" 
+                                 data-bs-target="#itemModal{{ item.id }}"
+                                 title="View Details">
+                        </td>
+                        <td>
+                            <span class="text-muted small">#{{ item.id }}</span>
+                        </td>
+                        <td>
+                            <span class="small fw-semibold {% if item.status == 'found' %}text-success{% else %}text-warning{% endif %}">
+                                {{ item.status|capitalize }}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="fw-semibold text-main">{{ item.item_type }}</div>
+                            <div class="text-muted small">
+                                {% if item.brand %}{{ item.brand }}{% endif %}{% if item.brand and item.color %} &middot; {% endif %}{% if item.color %}{{ item.color }}{% endif %}
+                                {% if not item.brand and not item.color %}&mdash;{% endif %}
+                            </div>
+                        </td>
+                        <td>
+                            <div class="text-truncate" style="max-width: 160px;" title="{{ item.location }}">
+                                <i class="bi bi-geo-alt me-1 text-muted"></i>{{ item.location }}
+                            </div>
+                        </td>
+                        <td>
+                            <div class="text-truncate small" style="max-width: 140px;" title="{{ item.contact_info }}">
+                                {{ item.contact_info }}
+                            </div>
+                        </td>
+                        <td class="text-nowrap small text-muted">
+                            {{ item.timestamp.strftime('%b %d, %Y') if item.timestamp else 'N/A' }}
+                        </td>
+                        <td class="text-end text-nowrap">
+                            <button type="button" class="btn btn-light btn-sm border me-1" data-bs-toggle="modal" data-bs-target="#itemModal{{ item.id }}" title="View details">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                            <form action="{{ url_for('admin_delete_item', item_id=item.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Permanently delete item #{{ item.id }} ({{ item.item_type }})?');">
+                                <button type="submit" class="btn btn-outline-danger btn-sm px-2" title="Delete record">
+                                    <i class="bi bi-trash3"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- No Match Alert when Filtered -->
+    <div id="noFilterResults" class="alert alert-light border text-center py-4 d-none">
+        <i class="bi bi-search text-muted fs-4 d-block mb-2"></i>
+        <div class="fw-semibold text-main">No matching records found</div>
+        <small class="text-muted">Try adjusting your search keywords or filter status.</small>
+    </div>
+
+    <!-- Item Details Modals -->
+    {% for item in items %}
+        <div class="modal fade" id="itemModal{{ item.id }}" tabindex="-1" aria-labelledby="itemModalLabel{{ item.id }}" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-lg">
+                <div class="modal-content border-0 shadow">
+                    <div class="modal-header border-bottom py-3">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="text-muted small">#{{ item.id }}</span>
+                            <h5 class="modal-title fw-bold text-main ms-1 mb-0" id="itemModalLabel{{ item.id }}">{{ item.item_type }}</h5>
+                            <span class="small fw-semibold ms-2 {% if item.status == 'found' %}text-success{% else %}text-warning{% endif %}">
+                                &middot; {{ item.status|capitalize }}
+                            </span>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+
+                    <div class="modal-body p-4">
+                        <div class="row g-4">
+                            <!-- Image Column -->
+                            <div class="col-md-5">
+                                <div class="border rounded p-2 bg-light text-center h-100 d-flex align-items-center justify-content-center">
+                                    <img src="{{ url_for('uploaded_file', filename=item.image_filename) }}" 
+                                         alt="{{ item.item_type }}" 
+                                         class="img-fluid rounded" 
+                                         style="max-height: 280px; object-fit: contain;">
+                                </div>
+                            </div>
+
+                            <!-- Details Column -->
+                            <div class="col-md-7">
+                                <h6 class="fw-bold text-main mb-2">Item Specifications</h6>
+                                <div class="table-responsive mb-3">
+                                    <table class="table table-sm table-borderless small mb-0">
+                                        <tbody>
+                                            <tr>
+                                                <td class="text-muted" style="width: 100px;">Location:</td>
+                                                <td class="fw-medium text-main">{{ item.location }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="text-muted">Color:</td>
+                                                <td class="fw-medium text-main">{{ item.color or 'N/A' }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="text-muted">Brand:</td>
+                                                <td class="fw-medium text-main">{{ item.brand or 'N/A' }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="text-muted">Contact Info:</td>
+                                                <td class="fw-medium text-main">{{ item.contact_info }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="text-muted">Reported:</td>
+                                                <td class="fw-medium text-main">{{ item.timestamp.strftime('%Y-%m-%d %H:%M:%S') if item.timestamp else 'N/A' }}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <h6 class="fw-bold text-main mb-2">Item Description & Notes</h6>
+                                <div class="bg-light p-3 rounded small text-muted" style="max-height: 140px; overflow-y: auto;">
+                                    {{ (item.ai_description or 'No visual description recorded.') | render_markdown }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer border-top py-2 d-flex justify-content-between">
+                        <form action="{{ url_for('admin_delete_item', item_id=item.id) }}" method="POST" onsubmit="return confirm('Permanently delete item #{{ item.id }} ({{ item.item_type }})?');">
+                            <button type="submit" class="btn btn-outline-danger btn-sm">
+                                <i class="bi bi-trash3 me-1"></i> Delete Record
+                            </button>
+                        </form>
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endfor %}
+
+    <!-- Modal: Clear All Confirmation -->
+    <div class="modal fade" id="clearAllModal" tabindex="-1" aria-labelledby="clearAllModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header border-bottom py-3">
+                    <h5 class="modal-title text-danger fw-bold" id="clearAllModalLabel">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>Clear All Records
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <p class="mb-2">Are you sure you want to permanently delete <strong>all {{ items|length }} records</strong> and remove their uploaded images from storage?</p>
+                    <div class="alert alert-danger small mb-0">
+                        <i class="bi bi-shield-exclamation me-1"></i> This action cannot be undone. All database records and associated media will be deleted immediately.
+                    </div>
+                </div>
+                <div class="modal-footer border-top py-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <form action="{{ url_for('admin_clear_all') }}" method="POST">
+                        <button type="submit" class="btn btn-danger btn-sm px-3">
+                            Confirm Clear All
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
 {% else %}
-    <div class="alert alert-secondary text-center py-5">
-        <h4 class="alert-heading">Database is Clean</h4>
-        <p class="mb-3">There are currently no items registered in the database.</p>
-        <a href="{{ url_for('report_found') }}" class="btn btn-primary btn-sm me-2">Report a Found Item</a>
-        <a href="{{ url_for('index') }}" class="btn btn-outline-secondary btn-sm">Home</a>
+    <!-- Empty State -->
+    <div class="card border border-dashed text-center py-5 px-3 my-4">
+        <div class="py-4">
+            <i class="bi bi-inbox text-muted display-4 d-block mb-3"></i>
+            <h3 class="h5 fw-bold text-main mb-1">No Items Registered</h3>
+            <p class="text-muted small col-md-6 mx-auto mb-4">
+                The database currently has no records. When items are reported through the platform, they will appear here.
+            </p>
+            <div class="d-flex justify-content-center gap-2">
+                <a href="{{ url_for('report_found') }}" class="btn btn-primary btn-sm px-3">
+                    Report a Found Item
+                </a>
+                <a href="{{ url_for('index') }}" class="btn btn-outline-secondary btn-sm px-3">
+                    Back to Home
+                </a>
+            </div>
+        </div>
     </div>
 {% endif %}
 
-<div class="mt-4 pt-3 border-top">
-    <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">Back to Home</a>
-    <a href="{{ url_for('report_found') }}" class="btn btn-outline-primary">Report Found Item</a>
-    <a href="{{ url_for('search_lost') }}" class="btn btn-outline-info">Search Lost Item</a>
-</div>
+<!-- Admin Client-side Search and Filter Script -->
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var searchInput = document.getElementById('adminSearchInput');
+    var statusButtons = document.querySelectorAll('.status-filter-btn');
+    var gridView = document.getElementById('adminGridView');
+    var tableView = document.getElementById('adminTableView');
+    var gridToggleBtn = document.getElementById('gridToggleBtn');
+    var tableToggleBtn = document.getElementById('tableToggleBtn');
+    var countDisplay = document.getElementById('itemCountDisplay');
+    var noResults = document.getElementById('noFilterResults');
+
+    if (!searchInput) return;
+
+    var currentStatus = 'all';
+    var currentQuery = '';
+
+    // Handle View Mode Toggle (Grid vs Table) with LocalStorage persistence
+    var savedView = localStorage.getItem('lnf_admin_view') || 'grid';
+    applyView(savedView);
+
+    if (gridToggleBtn && tableToggleBtn) {
+        gridToggleBtn.addEventListener('click', function () {
+            applyView('grid');
+        });
+        tableToggleBtn.addEventListener('click', function () {
+            applyView('table');
+        });
+    }
+
+    function applyView(mode) {
+        if (mode === 'table') {
+            if (gridView) gridView.classList.add('d-none');
+            if (tableView) tableView.classList.remove('d-none');
+            if (tableToggleBtn) tableToggleBtn.classList.add('active');
+            if (gridToggleBtn) gridToggleBtn.classList.remove('active');
+            localStorage.setItem('lnf_admin_view', 'table');
+        } else {
+            if (tableView) tableView.classList.add('d-none');
+            if (gridView) gridView.classList.remove('d-none');
+            if (gridToggleBtn) gridToggleBtn.classList.add('active');
+            if (tableToggleBtn) tableToggleBtn.classList.remove('active');
+            localStorage.setItem('lnf_admin_view', 'grid');
+        }
+    }
+
+    // Status filter tabs
+    statusButtons.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            statusButtons.forEach(function (b) { b.classList.remove('active'); });
+            this.classList.add('active');
+            currentStatus = this.getAttribute('data-status') || 'all';
+            filterItems();
+        });
+    });
+
+    // Real-time search filter
+    searchInput.addEventListener('input', function () {
+        currentQuery = this.value.toLowerCase().trim();
+        filterItems();
+    });
+
+    function filterItems() {
+        var cardItems = document.querySelectorAll('.item-card-container');
+        var tableRows = document.querySelectorAll('.item-table-row');
+        var total = cardItems.length;
+        var visibleCount = 0;
+
+        function matches(el) {
+            var itemStatus = el.getAttribute('data-status') || '';
+            var content = el.getAttribute('data-search-content') || '';
+            var statusMatch = (currentStatus === 'all' || itemStatus === currentStatus);
+            var queryMatch = (!currentQuery || content.indexOf(currentQuery) !== -1);
+            return statusMatch && queryMatch;
+        }
+
+        cardItems.forEach(function (item) {
+            if (matches(item)) {
+                item.classList.remove('d-none');
+                visibleCount++;
+            } else {
+                item.classList.add('d-none');
+            }
+        });
+
+        tableRows.forEach(function (row) {
+            if (matches(row)) {
+                row.classList.remove('d-none');
+            } else {
+                row.classList.add('d-none');
+            }
+        });
+
+        if (countDisplay) {
+            countDisplay.textContent = 'Showing ' + visibleCount + ' of ' + total;
+        }
+
+        if (noResults) {
+            if (visibleCount === 0 && total > 0) {
+                noResults.classList.remove('d-none');
+            } else {
+                noResults.classList.add('d-none');
+            }
+        }
+    }
+});
+</script>
 {% endblock %}
