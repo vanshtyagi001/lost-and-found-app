@@ -20,7 +20,7 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
 # --- Admin Authentication Credentials ---
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "myAdmin@20")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
 
 # --- Matching Thresholds (Configurable via .env with fallback defaults) ---
 DESCRIPTION_SIMILARITY_THRESHOLD = float(os.environ.get("DESCRIPTION_SIMILARITY_THRESHOLD", 0.40))
