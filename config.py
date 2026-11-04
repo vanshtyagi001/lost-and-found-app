@@ -18,6 +18,10 @@ if DATABASE_URI.startswith("postgres://"):
 UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", "uploads")
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
+# --- Admin Authentication Credentials ---
+ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "myAdmin@20")
+
 # --- Matching Thresholds (Configurable via .env with fallback defaults) ---
 DESCRIPTION_SIMILARITY_THRESHOLD = float(os.environ.get("DESCRIPTION_SIMILARITY_THRESHOLD", 0.40))
 METADATA_SIMILARITY_THRESHOLD = float(os.environ.get("METADATA_SIMILARITY_THRESHOLD", 0.50))

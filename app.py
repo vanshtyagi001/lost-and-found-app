@@ -1,6 +1,7 @@
 import os
 import google.generativeai as genai
-from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory, abort
+from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory, abort, session
+from functools import wraps
 from werkzeug.utils import secure_filename
 from PIL import Image as PILImage # Use PILImage to avoid conflict
 import io
@@ -14,7 +15,7 @@ try:
         GEMINI_TEXT_API_KEY, GEMINI_IMAGE_API_KEY, SECRET_KEY, DATABASE_URI,
         UPLOAD_FOLDER, ALLOWED_EXTENSIONS, GEMINI_MODEL_NAME, GEMINI_TEMPERATURE,
         DESCRIPTION_SIMILARITY_THRESHOLD, METADATA_SIMILARITY_THRESHOLD,
-        IMAGE_SIMILARITY_THRESHOLD
+        IMAGE_SIMILARITY_THRESHOLD, ADMIN_USERNAME, ADMIN_PASSWORD
     )
 except ImportError as e:
     print(f"CRITICAL ERROR: Could not import from config.py: {e}")
@@ -410,15 +411,58 @@ def uploaded_file(filename):
         return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=False)
     except FileNotFoundError: abort(404)
 
-# --- Admin Routes (Developer Purposes) ---
+# --- Admin Authentication & Routes ---
+
+def admin_required(f):
+    """Decorator that protects admin endpoints with session-based authentication."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('admin_logged_in'):
+            flash('Administrator authentication required. Please sign in.', 'warning')
+            next_url = request.full_path if request.method == 'GET' and not request.full_path.startswith('/admin/login') else None
+            return redirect(url_for('admin_login', next=next_url))
+        return f(*args, **kwargs)
+    return decorated_function
+
+@app.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
+    """Handles admin sign-in with credentials."""
+    if session.get('admin_logged_in'):
+        return redirect(url_for('admin'))
+
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+
+        if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
+            session['admin_logged_in'] = True
+            flash('Welcome back, Administrator.', 'success')
+            next_url = request.args.get('next')
+            if next_url and next_url.startswith('/') and not next_url.startswith('//'):
+                return redirect(next_url)
+            return redirect(url_for('admin'))
+        else:
+            flash('Invalid username or password. Please try again.', 'danger')
+            return render_template('admin_login.html', entered_username=username)
+
+    return render_template('admin_login.html', entered_username='')
+
+@app.route('/admin/logout')
+def admin_logout():
+    """Logs out the administrator and clears session."""
+    session.pop('admin_logged_in', None)
+    flash('You have been logged out of the administrator panel.', 'info')
+    return redirect(url_for('admin_login'))
 
 @app.route('/admin')
+@admin_required
 def admin():
     """Renders the developer admin dashboard listing all items."""
     items = Item.query.order_by(Item.timestamp.desc()).all()
     return render_template('admin.html', items=items)
 
 @app.route('/admin/delete/<int:item_id>', methods=['POST'])
+@admin_required
 def admin_delete_item(item_id):
     """Deletes an item from the database and removes its uploaded image."""
     item = Item.query.get_or_404(item_id)
@@ -440,6 +484,7 @@ def admin_delete_item(item_id):
     return redirect(url_for('admin'))
 
 @app.route('/admin/clear_all', methods=['POST'])
+@admin_required
 def admin_clear_all():
     """Clears all items from the database and removes their uploaded images."""
     try:

@@ -39,8 +39,8 @@ This platform overcomes keyword limitations through a multimodal perception pipe
 * The system analyzes the search image, computes visual features, and queries candidate items from the database.
 * The system evaluates each candidate using the three-tier similarity pipeline and outputs ranked results sorted by match confidence.
 
-### 3. Developer Admin Dashboard (`/admin`)
-* Dedicated control panel to inspect all reported items, metadata, timestamps, and generated descriptions.
+### 3. Protected Admin Dashboard (`/admin`)
+* Password-authenticated control panel (Default: `admin` / `myAdmin@20`) to inspect all reported items, metadata, timestamps, and generated descriptions.
 * Single-item deletion that removes the database record and cleans up the associated media file from disk to prevent orphaned storage.
 * Bulk database reset capability to clear all records and uploaded assets during testing cycles.
 
@@ -119,7 +119,8 @@ lost-and-found-app/
 │   ├── report_found.html # Found item reporting form
 │   ├── search_lost.html  # Lost item search form
 │   ├── results.html    # Ranked match results with score breakdowns
-│   └── admin.html      # Developer management dashboard for record deletion
+│   ├── admin.html      # Developer management dashboard for record deletion
+│   └── admin_login.html # Secure admin authentication portal
 ├── uploads/            # Storage directory for uploaded images (persisted with .gitkeep)
 └── instance/           # Local SQLite database directory (items.db)
 ```
@@ -177,6 +178,10 @@ FLASK_SECRET_KEY=generate_a_random_secret_key_here
 # Optional: Override default Gemini model and temperature
 GEMINI_MODEL_NAME=gemini-3.1-flash-lite
 GEMINI_TEMPERATURE=0.2
+
+# Admin Authentication Credentials
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=myAdmin@20
 ```
 
 ### 5. Start the Application Server

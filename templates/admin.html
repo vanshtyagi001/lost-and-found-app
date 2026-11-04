@@ -7,13 +7,16 @@
         <h1 class="h3 fw-bold text-main mb-1">Item Management</h1>
         <p class="text-muted mb-0">Review, inspect, and moderate all reported items in the database.</p>
     </div>
-    {% if items %}
-        <div class="d-flex align-items-center gap-2">
+    <div class="d-flex align-items-center gap-2">
+        {% if items %}
             <button type="button" class="btn btn-outline-danger btn-sm px-3" data-bs-toggle="modal" data-bs-target="#clearAllModal">
                 <i class="bi bi-trash3 me-1"></i> Clear All Records
             </button>
-        </div>
-    {% endif %}
+        {% endif %}
+        <a href="{{ url_for('admin_logout') }}" class="btn btn-outline-secondary btn-sm px-3">
+            <i class="bi bi-box-arrow-right me-1"></i> Log Out
+        </a>
+    </div>
 </div>
 
 {% if items %}
