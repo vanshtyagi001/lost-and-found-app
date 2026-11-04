@@ -6,3 +6,4 @@ python-dotenv
 werkzeug
 markdown-it-py
 gunicorn
+psycopg2-binary

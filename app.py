@@ -48,13 +48,13 @@ except Exception as e:
 try:
     db.init_app(app)
     print("SQLAlchemy initialized with app.")
-    # Ensure database tables and upload directory exist on startup (supports Gunicorn & local dev)
+    # Ensure database tables, instance path, and upload directory exist on startup (supports Gunicorn & local dev)
+    os.makedirs(app.instance_path, exist_ok=True)
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     with app.app_context():
         db.create_all()
         print("Database tables initialized successfully.")
-    if not os.path.exists(app.config['UPLOAD_FOLDER']):
-        os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-        print(f"Created upload directory: {app.config['UPLOAD_FOLDER']}")
+    print(f"Upload directory verified: {app.config['UPLOAD_FOLDER']}")
 except Exception as e:
     print(f"CRITICAL ERROR during app initialization: {e}")
     exit()
@@ -83,6 +83,19 @@ except Exception as e:
 print("--- Finished Gemini API Configuration Attempt ---")
 
 # --- Helper Functions ---
+
+def optimize_image_for_ai(image_path, max_dim=1024):
+    """
+    Opens an image and resizes it so max dimension <= max_dim.
+    Saves ~95% RAM and bandwidth on cloud environments like Render,
+    preventing worker timeouts and out-of-memory crashes.
+    """
+    img = PILImage.open(image_path)
+    if img.mode != 'RGB':
+        img = img.convert('RGB')
+    if max(img.size) > max_dim:
+        img.thumbnail((max_dim, max_dim), PILImage.Resampling.LANCZOS)
+    return img
 
 def clean_ai_description(text):
     """Strips conversational preambles (e.g. 'To help identify...', 'Here is a description...') from Gemini output."""
@@ -113,8 +126,7 @@ def generate_description_gemini(image_path):
         if GEMINI_TEXT_API_KEY and GEMINI_TEXT_API_KEY != "YOUR API KEY":
             genai.configure(api_key=GEMINI_TEXT_API_KEY)
         print(f"Generating description for: {os.path.basename(image_path)}")
-        img = PILImage.open(image_path)
-        if img.mode != 'RGB': img = img.convert('RGB')
+        img = optimize_image_for_ai(image_path, max_dim=1024)
         prompt = (
             "Describe this item in detail for a lost and found platform. "
             "Focus on visual characteristics like type, color, material, shape, and any unique markings. "
@@ -182,9 +194,8 @@ def compare_images_gemini(image_path1, image_path2):
         if GEMINI_IMAGE_API_KEY and GEMINI_IMAGE_API_KEY != "YOUR API KEY":
             genai.configure(api_key=GEMINI_IMAGE_API_KEY)
         print(f"Comparing images: {os.path.basename(image_path1)} and {os.path.basename(image_path2)}")
-        img1 = PILImage.open(image_path1); img2 = PILImage.open(image_path2)
-        if img1.mode != 'RGB': img1 = img1.convert('RGB')
-        if img2.mode != 'RGB': img2 = img2.convert('RGB')
+        img1 = optimize_image_for_ai(image_path1, max_dim=1024)
+        img2 = optimize_image_for_ai(image_path2, max_dim=1024)
         prompt = """
         On a scale of 0.0 to 1.0, how visually similar are the items in these two images?
         Respond ONLY with the numerical score (e.g., 0.90).
@@ -278,8 +289,10 @@ def report_found():
         filepath = None
         try:
             basefilename, file_extension = os.path.splitext(file.filename)
-            safe_base = secure_filename(basefilename)
-            filename = f"found_{int(time.time())}_{safe_base}{file_extension}"
+            safe_base = secure_filename(basefilename) or "item"
+            ext = file_extension.lower() if file_extension else ".jpg"
+            filename = f"found_{int(time.time())}_{safe_base}{ext}"
+            os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(filepath)
             print(f"Image saved to: {filepath}")
@@ -329,8 +342,10 @@ def search_lost():
         search_filepath = None
         try:
             basefilename, file_extension = os.path.splitext(file.filename)
-            safe_base = secure_filename(basefilename)
-            search_filename = f"search_{int(time.time())}_{safe_base}{file_extension}"
+            safe_base = secure_filename(basefilename) or "search"
+            ext = file_extension.lower() if file_extension else ".jpg"
+            search_filename = f"search_{int(time.time())}_{safe_base}{ext}"
+            os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
             search_filepath = os.path.join(app.config['UPLOAD_FOLDER'], search_filename)
             file.save(search_filepath)
             print(f"Search image saved temporarily to: {search_filepath}")
@@ -518,6 +533,21 @@ def init_db():
             print("Database tables checked/created successfully.")
         except Exception as e:
             print(f"CRITICAL Error creating database tables: {e}")
+
+# --- Error Handlers ---
+@app.errorhandler(500)
+def handle_internal_server_error(e):
+    """Logs traceback for production debugging and renders clean message."""
+    import traceback
+    print("=== FLASK 500 INTERNAL SERVER ERROR ===")
+    traceback.print_exc()
+    print("========================================")
+    try:
+        db.session.rollback()
+    except Exception:
+        pass
+    flash("An unexpected server error occurred while processing your request. Please try again.", "danger")
+    return render_template('index.html'), 500
 
 # --- Run Application ---
 if __name__ == '__main__':
