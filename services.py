@@ -255,17 +255,23 @@ def find_matching_found_items(lost_item_details, upload_folder):
         if desc_similarity < DESCRIPTION_SIMILARITY_THRESHOLD:
             continue
 
-        # Tier 3: Direct Visual Similarity (Gemini Vision)
-        img_similarity = 0.0
-        found_image_path = os.path.join(upload_folder, found_item.image_filename)
-        if os.path.exists(found_image_path):
-            img_similarity = compare_images_gemini(lost_item_details["image_path"], found_image_path)
-            match_scores["image"] = round(img_similarity, 4)
+        # Tier 3: Direct Visual Similarity (Gemini Vision) — only when a search image is provided
+        if lost_item_details.get("image_path"):
+            img_similarity = 0.0
+            found_image_path = os.path.join(upload_folder, found_item.image_filename)
+            if os.path.exists(found_image_path):
+                img_similarity = compare_images_gemini(lost_item_details["image_path"], found_image_path)
+                match_scores["image"] = round(img_similarity, 4)
 
-        if img_similarity < IMAGE_SIMILARITY_THRESHOLD:
-            continue
+            if img_similarity < IMAGE_SIMILARITY_THRESHOLD:
+                continue
 
-        confidence = (desc_similarity * 0.3) + (meta_similarity * 0.3) + (img_similarity * 0.4)
+            confidence = (desc_similarity * 0.3) + (meta_similarity * 0.3) + (img_similarity * 0.4)
+        else:
+            # Text-only search fallback (no reference photo uploaded)
+            if desc_similarity < max(DESCRIPTION_SIMILARITY_THRESHOLD, 0.55):
+                continue
+            confidence = (desc_similarity * 0.65) + (meta_similarity * 0.35)
         match_scores["confidence"] = round(confidence, 4)
         matches.append({
             "found_item": found_item,
