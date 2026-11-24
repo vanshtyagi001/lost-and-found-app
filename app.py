@@ -1,21 +1,15 @@
 import os
-import google.generativeai as genai
-from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory, abort, session
+from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory, abort, session, jsonify
 from functools import wraps
-from werkzeug.utils import secure_filename
-from PIL import Image as PILImage # Use PILImage to avoid conflict
-import io
-import time
-import re # Import regex for parsing Gemini responses
+import re
 from datetime import datetime
 
 # Import config and models
 try:
     from config import (
-        GEMINI_TEXT_API_KEY, GEMINI_IMAGE_API_KEY, SECRET_KEY, DATABASE_URI,
-        UPLOAD_FOLDER, ALLOWED_EXTENSIONS, GEMINI_MODEL_NAME, GEMINI_TEMPERATURE,
-        DESCRIPTION_SIMILARITY_THRESHOLD, METADATA_SIMILARITY_THRESHOLD,
-        IMAGE_SIMILARITY_THRESHOLD, ADMIN_USERNAME, ADMIN_PASSWORD
+        SECRET_KEY, DATABASE_URI,
+        UPLOAD_FOLDER, ALLOWED_EXTENSIONS,
+        ADMIN_USERNAME, ADMIN_PASSWORD
     )
 except ImportError as e:
     print(f"CRITICAL ERROR: Could not import from config.py: {e}")
@@ -28,6 +22,16 @@ except ImportError as e:
     print(f"CRITICAL ERROR: Could not import from models.py: {e}")
     print("Ensure models.py exists and defines db and Item.")
     exit()
+
+from services import (
+    ITEM_TYPES,
+    allowed_file,
+    clean_ai_description,
+    find_matching_found_items,
+    generate_description_gemini,
+    save_uploaded_image,
+)
+from api_v1 import api_v1
 
 # --- Flask App Setup ---
 app = Flask(__name__)
@@ -59,185 +63,8 @@ except Exception as e:
     print(f"CRITICAL ERROR during app initialization: {e}")
     exit()
 
-# --- Gemini API Configuration ---
-print("--- Attempting Gemini API Configuration ---")
-try:
-    if GEMINI_TEXT_API_KEY and GEMINI_TEXT_API_KEY != "YOUR API KEY":
-        genai.configure(api_key=GEMINI_TEXT_API_KEY)
-        print(f"Gemini API configured (using text key ending ...{GEMINI_TEXT_API_KEY[-4:]}).")
-    elif GEMINI_IMAGE_API_KEY and GEMINI_IMAGE_API_KEY != "YOUR API KEY":
-        genai.configure(api_key=GEMINI_IMAGE_API_KEY)
-        print(f"Gemini API configured (using image key ending ...{GEMINI_IMAGE_API_KEY[-4:]}).")
-except Exception as e:
-    print(f"ERROR during genai.configure: {e}.")
-
-text_model = None
-vision_model = None
-try:
-    generation_config = {"temperature": GEMINI_TEMPERATURE}
-    text_model = genai.GenerativeModel(GEMINI_MODEL_NAME, generation_config=generation_config)
-    vision_model = genai.GenerativeModel(GEMINI_MODEL_NAME, generation_config=generation_config) # Assumes same model okay
-    print(f"Gemini models ('{GEMINI_MODEL_NAME}', temp={GEMINI_TEMPERATURE}) initialized successfully.")
-except Exception as e:
-     print(f"ERROR creating Gemini models ('{GEMINI_MODEL_NAME}'): {e}. AI features will likely fail.")
-print("--- Finished Gemini API Configuration Attempt ---")
-
-# --- Helper Functions ---
-
-def optimize_image_for_ai(image_path, max_dim=1024):
-    """
-    Opens an image and resizes it so max dimension <= max_dim.
-    Saves ~95% RAM and bandwidth on cloud environments like Render,
-    preventing worker timeouts and out-of-memory crashes.
-    """
-    img = PILImage.open(image_path)
-    if img.mode != 'RGB':
-        img = img.convert('RGB')
-    if max(img.size) > max_dim:
-        img.thumbnail((max_dim, max_dim), PILImage.Resampling.LANCZOS)
-    return img
-
-def clean_ai_description(text):
-    """Strips conversational preambles (e.g. 'To help identify...', 'Here is a description...') from Gemini output."""
-    if not text:
-        return text
-    # Strip introductory sentences ending with a colon or newline
-    pattern = r"^(?:(?:To help|For a|Here is|Below is|Based on|Sure|Certainly|This is)[^\n:]*?(?::|\n+))\s*"
-    cleaned = re.sub(pattern, "", str(text).strip(), flags=re.IGNORECASE)
-    # Also strip concluding remarks if any (e.g., "Hope this helps identify the item!")
-    cleaned = re.sub(r"\n+(?:Hope this helps|I hope this helps).*?$", "", cleaned, flags=re.IGNORECASE)
-    return cleaned.strip()
-
-def allowed_file(filename):
-    """Checks if the file extension is allowed."""
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
-
-def generate_description_gemini(image_path):
-    """Generates a description for an image using Gemini."""
-    if not text_model:
-        print("Attempted to generate description, but text_model is not available.")
-        return "Error: Gemini text model not initialized."
-    if not os.path.exists(image_path):
-        print(f"Image file not found at path: {image_path}")
-        return "Error: Image file not found."
-
-    try:
-        if GEMINI_TEXT_API_KEY and GEMINI_TEXT_API_KEY != "YOUR API KEY":
-            genai.configure(api_key=GEMINI_TEXT_API_KEY)
-        print(f"Generating description for: {os.path.basename(image_path)}")
-        img = optimize_image_for_ai(image_path, max_dim=1024)
-        prompt = (
-            "Describe this item in detail for a lost and found platform. "
-            "Focus on visual characteristics like type, color, material, shape, and any unique markings. "
-            "Do NOT include any conversational preamble or introductory remarks like 'To help identify...', 'Here is a description...', or 'For a lost and found listing'. "
-            "Start directly with the item description."
-        )
-        contents = [prompt, img]
-        response = text_model.generate_content(contents)
-        raw_description = response.text.strip() if hasattr(response, 'text') and response.text else "AI could not generate a description."
-        cleaned_description = clean_ai_description(raw_description)
-        print(f"Gemini Description Response: {cleaned_description[:100]}...")
-        return cleaned_description
-    except Exception as e:
-        print(f"Error generating description with Gemini: {e}")
-        error_message = f"Error generating AI description: {type(e).__name__}."
-        if "API key" in str(e): error_message = "Error: Invalid/missing Gemini API key (Text)."
-        elif "quota" in str(e).lower(): error_message = "Error: Gemini API quota exceeded."
-        elif "DeadlineExceeded" in str(e): error_message = "Error: Gemini API request timed out."
-        elif "ResourceExhausted" in str(e): error_message = "Error: Gemini API resource exhausted."
-        return error_message
-
-def compare_descriptions_gemini(desc1, desc2):
-    """Compares two descriptions for semantic similarity using Gemini."""
-    if not text_model:
-        print("Attempted description comparison, but text_model is not available.")
-        return 0.0
-    if not desc1 or not desc2: return 0.0
-
-    try:
-        if GEMINI_TEXT_API_KEY and GEMINI_TEXT_API_KEY != "YOUR API KEY":
-            genai.configure(api_key=GEMINI_TEXT_API_KEY)
-        print("Comparing descriptions...")
-        prompt = f"""
-        On a scale of 0.0 to 1.0, how semantically similar are these descriptions?
-        1: "{desc1}"
-        2: "{desc2}"
-        Respond ONLY with the numerical score (e.g., 0.75).
-        """
-        response = text_model.generate_content(prompt)
-        print(f"Gemini Description Similarity Response: {response.text}")
-        try:
-            match = re.search(r"[-+]?\d*\.\d+|\d+", response.text)
-            if match:
-                similarity = float(match.group())
-                return max(0.0, min(1.0, similarity))
-            else:
-                 print(f"Warning: Could not parse number from description similarity response: {response.text}")
-                 return 0.0
-        except (ValueError, AttributeError) as parse_err:
-            print(f"Warning: Error parsing similarity score ({parse_err}): {response.text}")
-            return 0.0
-    except Exception as e:
-        print(f"Error comparing descriptions with Gemini: {e}")
-        return 0.0
-
-def compare_images_gemini(image_path1, image_path2):
-    """Compares two images for visual similarity using Gemini Vision."""
-    if not vision_model:
-        print("Attempted image comparison, but vision_model is not available.")
-        return 0.0
-    if not os.path.exists(image_path1): print(f"Image file 1 not found: {image_path1}"); return 0.0
-    if not os.path.exists(image_path2): print(f"Image file 2 not found: {image_path2}"); return 0.0
-
-    try:
-        if GEMINI_IMAGE_API_KEY and GEMINI_IMAGE_API_KEY != "YOUR API KEY":
-            genai.configure(api_key=GEMINI_IMAGE_API_KEY)
-        print(f"Comparing images: {os.path.basename(image_path1)} and {os.path.basename(image_path2)}")
-        img1 = optimize_image_for_ai(image_path1, max_dim=1024)
-        img2 = optimize_image_for_ai(image_path2, max_dim=1024)
-        prompt = """
-        On a scale of 0.0 to 1.0, how visually similar are the items in these two images?
-        Respond ONLY with the numerical score (e.g., 0.90).
-        """
-        contents = [prompt, img1, img2]
-        response = vision_model.generate_content(contents)
-        print(f"Gemini Image Similarity Response: {response.text}")
-        try:
-            match = re.search(r"[-+]?\d*\.\d+|\d+", response.text)
-            if match:
-                similarity = float(match.group())
-                return max(0.0, min(1.0, similarity))
-            else:
-                 print(f"Warning: Could not parse number from image similarity response: {response.text}")
-                 return 0.0
-        except (ValueError, AttributeError) as parse_err:
-            print(f"Warning: Error parsing image similarity score ({parse_err}): {response.text}")
-            return 0.0
-    except Exception as e:
-        print(f"Error comparing images with Gemini: {e}")
-        return 0.0
-
-def calculate_metadata_similarity(item_meta1, item_meta2):
-    """Calculates similarity based on item type, color, brand, location."""
-    score = 0; max_possible_score = 0
-    # Item Type (Exact Match, High Weight)
-    max_possible_score += 1.5
-    if item_meta1.get("item_type") and item_meta1["item_type"] == item_meta2.get("item_type"): score += 1.5
-    # Color (Partial Match)
-    max_possible_score += 1.0
-    if item_meta1.get("color") and item_meta1["color"] == item_meta2.get("color"): score += 1.0
-    elif item_meta1.get("color") and item_meta2.get("color") and (item_meta1["color"] in item_meta2["color"] or item_meta2["color"] in item_meta1["color"]): score += 0.5
-    # Brand (Partial Match, Bonus if both missing)
-    max_possible_score += 1.0
-    if item_meta1.get("brand") and item_meta1["brand"] == item_meta2.get("brand"): score += 1.0
-    elif item_meta1.get("brand") and item_meta2.get("brand") and (item_meta1["brand"] in item_meta2["brand"] or item_meta2["brand"] in item_meta1["brand"]): score += 0.5
-    elif not item_meta1.get("brand") and not item_meta2.get("brand"): score += 0.25
-    # Location (Simple Substring Match)
-    max_possible_score += 1.0
-    if item_meta1.get("location") and item_meta1["location"] == item_meta2.get("location"): score += 1.0
-    elif item_meta1.get("location") and item_meta2.get("location") and (item_meta1["location"] in item_meta2["location"] or item_meta2["location"] in item_meta1["location"]): score += 0.5
-    return score / max_possible_score if max_possible_score > 0 else 0
+# Register JSON REST API v1 Blueprint for native mobile clients
+app.register_blueprint(api_v1)
 
 # --- Markdown Parser & Template Filter ---
 from markupsafe import Markup
@@ -277,24 +104,18 @@ def index():
 @app.route('/report_found', methods=['GET', 'POST'])
 def report_found():
     """Handles reporting a found item."""
-    item_types = ["Electronics", "Keys", "Wallet/Purse", "Clothing", "Bag/Backpack", "Jewelry/Watch", "Book/Notebook", "Pet", "Identification", "Other"]
+    item_types = ITEM_TYPES
     if request.method == 'POST':
         if 'item_image' not in request.files: flash('No image file part selected', 'danger'); return redirect(request.url)
         file = request.files['item_image']
         if file.filename == '': flash('No image selected for uploading', 'danger'); return redirect(request.url)
         item_type = request.form.get('item_type'); location = request.form.get('location'); contact_info = request.form.get('contact_info')
         if not all([item_type, location, contact_info]): flash('Item Type, Location Found, and Contact Info are required fields.', 'danger'); return render_template('report_found.html', item_types=item_types, entered_data=request.form)
-        if not file or not allowed_file(file.filename): flash('Invalid file type. Allowed types: png, jpg, jpeg, gif', 'danger'); return render_template('report_found.html', item_types=item_types, entered_data=request.form)
+        if not file or not allowed_file(file.filename, app.config['ALLOWED_EXTENSIONS']): flash('Invalid file type. Allowed types: png, jpg, jpeg, gif', 'danger'); return render_template('report_found.html', item_types=item_types, entered_data=request.form)
 
         filepath = None
         try:
-            basefilename, file_extension = os.path.splitext(file.filename)
-            safe_base = secure_filename(basefilename) or "item"
-            ext = file_extension.lower() if file_extension else ".jpg"
-            filename = f"found_{int(time.time())}_{safe_base}{ext}"
-            os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(filepath)
+            filename, filepath = save_uploaded_image(file, app.config['UPLOAD_FOLDER'], prefix="found")
             print(f"Image saved to: {filepath}")
 
             ai_description = generate_description_gemini(filepath)
@@ -330,82 +151,31 @@ def report_found():
 @app.route('/search_lost', methods=['GET', 'POST'])
 def search_lost():
     """Handles searching for a lost item."""
-    item_types = ["Electronics", "Keys", "Wallet/Purse", "Clothing", "Bag/Backpack", "Jewelry/Watch", "Book/Notebook", "Pet", "Identification", "Other"]
+    item_types = ITEM_TYPES
     if request.method == 'POST':
         if 'item_image' not in request.files: flash('No image file part selected for search', 'danger'); return redirect(request.url)
         file = request.files['item_image']
         if file.filename == '': flash('No image selected for searching', 'danger'); return redirect(request.url)
         item_type = request.form.get('item_type'); location = request.form.get('location')
         if not all([item_type, location]): flash('Item Type and Last Known Location are required.', 'danger'); return render_template('search_lost.html', item_types=item_types, entered_data=request.form)
-        if not file or not allowed_file(file.filename): flash('Invalid file type for search image.', 'danger'); return render_template('search_lost.html', item_types=item_types, entered_data=request.form)
+        if not file or not allowed_file(file.filename, app.config['ALLOWED_EXTENSIONS']): flash('Invalid file type for search image.', 'danger'); return render_template('search_lost.html', item_types=item_types, entered_data=request.form)
 
         search_filepath = None
         try:
-            basefilename, file_extension = os.path.splitext(file.filename)
-            safe_base = secure_filename(basefilename) or "search"
-            ext = file_extension.lower() if file_extension else ".jpg"
-            search_filename = f"search_{int(time.time())}_{safe_base}{ext}"
-            os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-            search_filepath = os.path.join(app.config['UPLOAD_FOLDER'], search_filename)
-            file.save(search_filepath)
+            search_filename, search_filepath = save_uploaded_image(file, app.config['UPLOAD_FOLDER'], prefix="search")
             print(f"Search image saved temporarily to: {search_filepath}")
 
             lost_ai_description = generate_description_gemini(search_filepath)
             if lost_ai_description.startswith("Error:"): flash(f'AI description failed: {lost_ai_description}. Search quality might be affected.', 'warning'); lost_ai_description = ""
 
             lost_item_details = {"item_type": item_type.lower(), "color": request.form.get('color', '').lower(), "brand": request.form.get('brand', '').lower(), "location": location.lower(), "ai_description": lost_ai_description, "image_path": search_filepath}
-            found_items = Item.query.filter_by(status='found').all()
-            matches = []
             print(f"\n--- Starting Match Process for {search_filename} ---")
-
-            for found_item in found_items:
-                print(f"\nComparing with Found Item ID: {found_item.id} ({found_item.item_type})")
-                match_scores = {"description": 0.0, "metadata": 0.0, "image": 0.0, "confidence": 0.0}
-                desc_similarity = 0.0; meta_similarity = 0.0; img_similarity = 0.0
-
-                # Tier 1: Metadata Heuristics (Instant Local Pre-Filter - 0 API Calls)
-                found_item_meta = found_item.get_metadata()
-                meta_similarity = calculate_metadata_similarity(lost_item_details, found_item_meta)
-                match_scores["metadata"] = meta_similarity
-                print(f"  Meta Similarity: {meta_similarity:.2f} (Thresh: {METADATA_SIMILARITY_THRESHOLD})")
-
-                if meta_similarity < METADATA_SIMILARITY_THRESHOLD:
-                    print("  Skipping further checks (low metadata similarity - 0 API calls made).")
-                    continue
-
-                # Tier 2: Semantic Description Similarity (Gemini Text Check)
-                if lost_item_details["ai_description"] and found_item.ai_description and "failed" not in found_item.ai_description.lower():
-                    desc_similarity = compare_descriptions_gemini(lost_item_details["ai_description"], found_item.ai_description)
-                    match_scores["description"] = desc_similarity
-                    print(f"  Desc Similarity: {desc_similarity:.2f} (Thresh: {DESCRIPTION_SIMILARITY_THRESHOLD})")
-                else:
-                    print("  Skipping description comparison (missing/failed).")
-
-                if desc_similarity < DESCRIPTION_SIMILARITY_THRESHOLD:
-                    print("  Skipping further checks (low desc similarity).")
-                    continue
-
-                # Tier 3: Image
-                found_image_path = os.path.join(app.config['UPLOAD_FOLDER'], found_item.image_filename)
-                if os.path.exists(found_image_path):
-                    img_similarity = compare_images_gemini(lost_item_details["image_path"], found_image_path)
-                    match_scores["image"] = img_similarity
-                    print(f"  Image Similarity: {img_similarity:.2f} (Thresh: {IMAGE_SIMILARITY_THRESHOLD})")
-                else: print(f"  Skipping image comparison: Found item image not found at {found_image_path}")
-
-                if img_similarity < IMAGE_SIMILARITY_THRESHOLD: print("  Match failed image similarity threshold."); continue
-
-                # --- Match Found! ---
-                confidence = (desc_similarity * 0.3) + (meta_similarity * 0.3) + (img_similarity * 0.4)
-                match_scores["confidence"] = confidence
-                print(f"  >>> STRONG MATCH FOUND! Confidence: {confidence:.2f}")
-                matches.append({"found_item": found_item, "scores": match_scores, "confidence": confidence})
+            matches = find_matching_found_items(lost_item_details, app.config['UPLOAD_FOLDER'])
 
             if search_filepath and os.path.exists(search_filepath):
                 try: os.remove(search_filepath); print(f"Temporary search image removed: {search_filepath}")
                 except OSError as e: print(f"Error removing temporary search image {search_filepath}: {e}")
 
-            matches.sort(key=lambda x: x["confidence"], reverse=True)
             return render_template('results.html', matches=matches, search_description=lost_ai_description if lost_ai_description else "N/A")
 
         except Exception as e:
@@ -535,6 +305,14 @@ def init_db():
             print(f"CRITICAL Error creating database tables: {e}")
 
 # --- Error Handlers ---
+@app.errorhandler(413)
+def handle_request_entity_too_large(e):
+    """Returns JSON for API requests exceeding MAX_CONTENT_LENGTH."""
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "Uploaded file exceeds the 16MB size limit."}), 413
+    flash("Uploaded file is too large (max 16MB).", "danger")
+    return redirect(url_for('index'))
+
 @app.errorhandler(500)
 def handle_internal_server_error(e):
     """Logs traceback for production debugging and renders clean message."""
@@ -546,6 +324,8 @@ def handle_internal_server_error(e):
         db.session.rollback()
     except Exception:
         pass
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "Internal server error."}), 500
     flash("An unexpected server error occurred while processing your request. Please try again.", "danger")
     return render_template('index.html'), 500
 
