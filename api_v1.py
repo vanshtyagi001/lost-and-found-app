@@ -3,6 +3,7 @@ from datetime import datetime
 from functools import wraps
 from flask import Blueprint, current_app, jsonify, request, url_for
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from config import (
     ADMIN_PASSWORD,
@@ -11,7 +12,7 @@ from config import (
     IMAGE_SIMILARITY_THRESHOLD,
     METADATA_SIMILARITY_THRESHOLD,
 )
-from models import Item, db
+from models import Item, User, db
 from services import (
     ITEM_TYPES,
     allowed_file,
@@ -133,6 +134,7 @@ def report_found():
     contact_info = (request.form.get("contact_info") or "").strip()
     color = (request.form.get("color") or "").strip() or None
     brand = (request.form.get("brand") or "").strip() or None
+    user_description = (request.form.get("description") or "").strip()
 
     if not all([item_type, location, contact_info]):
         return jsonify({"error": "item_type, location, and contact_info are required."}), 400
@@ -147,6 +149,12 @@ def report_found():
         if ai_description.startswith("Error:"):
             ai_warning = ai_description
             ai_description = "AI description generation failed."
+
+        if user_description:
+            if ai_description == "AI description generation failed.":
+                ai_description = user_description
+            else:
+                ai_description = f"{ai_description}\n\nFinder notes: {user_description}"
 
         new_item = Item(
             status="found",
@@ -193,6 +201,7 @@ def search_lost():
     location = (request.form.get("location") or "").strip()
     color = (request.form.get("color") or "").strip().lower()
     brand = (request.form.get("brand") or "").strip().lower()
+    user_description = (request.form.get("description") or "").strip()
 
     if not all([item_type, location]):
         return jsonify({"error": "item_type and location are required."}), 400
@@ -201,12 +210,18 @@ def search_lost():
     try:
         upload_folder = current_app.config["UPLOAD_FOLDER"]
         _, search_filepath = save_uploaded_image(file, upload_folder, prefix="search")
-
         lost_ai_description = generate_description_gemini(search_filepath)
         ai_warning = None
         if lost_ai_description.startswith("Error:"):
             ai_warning = lost_ai_description
             lost_ai_description = ""
+
+        if user_description:
+            lost_ai_description = (
+                f"{lost_ai_description}\nUser notes: {user_description}".strip()
+                if lost_ai_description
+                else user_description
+            )
 
         lost_item_details = {
             "item_type": item_type.lower(),
@@ -245,6 +260,59 @@ def search_lost():
                 os.remove(search_filepath)
             except OSError:
                 pass
+
+
+@api_v1.route("/auth/register", methods=["POST"])
+def user_register():
+    """Registers a new user account and returns a signed Bearer token."""
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
+
+    if not name or not email or not password:
+        return jsonify({"error": "Name, email, and password are required."}), 400
+    if len(password) < 6:
+        return jsonify({"error": "Password must be at least 6 characters."}), 400
+    if User.query.filter_by(email=email).first():
+        return jsonify({"error": "An account with this email already exists."}), 409
+
+    user = User(
+        name=name,
+        email=email,
+        password_hash=generate_password_hash(password),
+    )
+    db.session.add(user)
+    db.session.commit()
+
+    token = _get_serializer().dumps({"user_id": user.id, "email": user.email, "role": "user"})
+    return jsonify({
+        "token": token,
+        "expires_in": TOKEN_MAX_AGE_SECONDS,
+        "user": user.to_dict(),
+    }), 201
+
+
+@api_v1.route("/auth/login", methods=["POST"])
+def user_login():
+    """Authenticates a user account and returns a signed Bearer token."""
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
+
+    if not email or not password:
+        return jsonify({"error": "Email and password are required."}), 400
+
+    user = User.query.filter_by(email=email).first()
+    if not user or not check_password_hash(user.password_hash, password):
+        return jsonify({"error": "Invalid email or password."}), 401
+
+    token = _get_serializer().dumps({"user_id": user.id, "email": user.email, "role": "user"})
+    return jsonify({
+        "token": token,
+        "expires_in": TOKEN_MAX_AGE_SECONDS,
+        "user": user.to_dict(),
+    }), 200
 
 
 @api_v1.route("/admin/login", methods=["POST"])

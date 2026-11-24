@@ -154,6 +154,59 @@ def test_search_lost_three_tier_match_and_cleanup(client, monkeypatch):
     assert upload_files[0].startswith("found_")
 
 
+def test_search_lost_requires_image_and_accepts_optional_description(client, monkeypatch):
+    monkeypatch.setattr(
+        api_v1,
+        "generate_description_gemini",
+        lambda path: "Silver keychain with two brass keys.",
+    )
+    monkeypatch.setattr(services, "compare_descriptions_gemini", lambda d1, d2: 0.88)
+    monkeypatch.setattr(services, "compare_images_gemini", lambda p1, p2: 0.90)
+
+    client.post(
+        "/api/v1/report-found",
+        data={
+            "item_type": "Keys",
+            "color": "Silver",
+            "location": "Gym",
+            "contact_info": "gym@example.com",
+            "description": "Found near locker 12",
+            "item_image": (_make_jpeg_bytes(), "keys.jpg"),
+        },
+        content_type="multipart/form-data",
+    )
+
+    # Missing image is rejected
+    no_img_resp = client.post(
+        "/api/v1/search-lost",
+        data={
+            "item_type": "Keys",
+            "color": "Silver",
+            "location": "Gym",
+            "description": "Silver keychain with two keys",
+        },
+        content_type="multipart/form-data",
+    )
+    assert no_img_resp.status_code == 400
+
+    # Image + optional description succeeds
+    resp = client.post(
+        "/api/v1/search-lost",
+        data={
+            "item_type": "Keys",
+            "color": "Silver",
+            "location": "Gym",
+            "description": "Has a small blue tag",
+            "item_image": (_make_jpeg_bytes(), "lost_keys.jpg"),
+        },
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["match_count"] == 1
+    assert "Has a small blue tag" in data["search_description"]
+
+
 def test_admin_token_auth_delete_and_clear(client, monkeypatch):
     monkeypatch.setattr(api_v1, "generate_description_gemini", lambda path: "Silver house key.")
 
@@ -206,3 +259,27 @@ def test_admin_token_auth_delete_and_clear(client, monkeypatch):
     assert clear_resp.status_code == 200
     assert clear_resp.get_json()["deleted_items"] == 1
     assert os.listdir(app.config["UPLOAD_FOLDER"]) == []
+
+
+def test_user_register_and_login(client):
+    reg_resp = client.post(
+        "/api/v1/auth/register",
+        json={"name": "Vansh Tyagi", "email": "vansh@example.com", "password": "secret123"},
+    )
+    assert reg_resp.status_code == 201
+    reg_data = reg_resp.get_json()
+    assert reg_data["user"]["email"] == "vansh@example.com"
+    assert reg_data["token"]
+
+    dup_resp = client.post(
+        "/api/v1/auth/register",
+        json={"name": "Vansh", "email": "vansh@example.com", "password": "secret123"},
+    )
+    assert dup_resp.status_code == 409
+
+    login_resp = client.post(
+        "/api/v1/auth/login",
+        json={"email": "vansh@example.com", "password": "secret123"},
+    )
+    assert login_resp.status_code == 200
+    assert login_resp.get_json()["user"]["name"] == "Vansh Tyagi"
