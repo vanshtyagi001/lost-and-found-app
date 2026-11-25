@@ -1,0 +1,125 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row justify-content-center my-4 my-md-5">
+    <div class="col-12 col-sm-10 col-md-7 col-lg-5 col-xl-4">
+        <div class="card border shadow-sm p-4 p-sm-5" style="border-radius: 12px;">
+            <!-- Header Title -->
+            <div class="text-center mb-4">
+                <h1 class="h4 fw-bold text-main mb-1">
+                    {% if mode == 'signup' %}Create Account{% else %}Welcome Back{% endif %}
+                </h1>
+                <p class="text-muted small mb-0">
+                    {% if mode == 'signup' %}
+                        Join Lost & Found to track and report items
+                    {% else %}
+                        Sign in to your Lost & Found account
+                    {% endif %}
+                </p>
+            </div>
+
+            <!-- Sign In / Sign Up Switch Tabs -->
+            <div class="d-flex p-1 rounded-3 mb-4" style="background-color: #f1f5f9;">
+                <a href="{{ url_for('user_login_page') }}"
+                   class="btn btn-sm flex-fill fw-semibold {% if mode != 'signup' %}bg-white shadow-sm text-primary{% else %}text-muted border-0{% endif %}"
+                   style="border-radius: 8px; padding: 0.45rem;">
+                    Sign In
+                </a>
+                <a href="{{ url_for('user_register_page') }}"
+                   class="btn btn-sm flex-fill fw-semibold {% if mode == 'signup' %}bg-white shadow-sm text-primary{% else %}text-muted border-0{% endif %}"
+                   style="border-radius: 8px; padding: 0.45rem;">
+                    Sign Up
+                </a>
+            </div>
+
+            <!-- Form -->
+            <form method="POST" action="{{ url_for('user_register_page') if mode == 'signup' else url_for('user_login_page', next=request.args.get('next')) }}">
+                {% if mode == 'signup' %}
+                <div class="mb-3">
+                    <label for="name" class="form-label small fw-semibold text-main mb-1">Full Name</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-white text-muted"><i class="bi bi-person"></i></span>
+                        <input type="text"
+                               class="form-control"
+                               id="name"
+                               name="name"
+                               value="{{ entered_name or '' }}"
+                               placeholder="Enter your full name"
+                               autocomplete="name"
+                               required
+                               autofocus>
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="mb-3">
+                    <label for="email" class="form-label small fw-semibold text-main mb-1">Email Address</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-white text-muted"><i class="bi bi-envelope"></i></span>
+                        <input type="email"
+                               class="form-control"
+                               id="email"
+                               name="email"
+                               value="{{ entered_email or '' }}"
+                               placeholder="you@example.com"
+                               autocomplete="email"
+                               required
+                               {% if mode != 'signup' %}autofocus{% endif %}>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label for="password" class="form-label small fw-semibold text-main mb-1">Password</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-white text-muted"><i class="bi bi-lock"></i></span>
+                        <input type="password"
+                               class="form-control"
+                               id="password"
+                               name="password"
+                               placeholder="{% if mode == 'signup' %}Minimum 6 characters{% else %}Enter your password{% endif %}"
+                               autocomplete="{% if mode == 'signup' %}new-password{% else %}current-password{% endif %}"
+                               required>
+                        <button type="button"
+                                class="btn btn-outline-secondary border-start-0"
+                                style="border-color: #dee2e6;"
+                                tabindex="-1"
+                                title="Show or hide password"
+                                onclick="toggleAuthPassword()">
+                            <i class="bi bi-eye" id="toggleAuthPasswordIcon"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <button type="submit"
+                        class="btn btn-primary w-100 py-2 fw-semibold mb-3"
+                        data-loading-text="{% if mode == 'signup' %}Creating Account...{% else %}Signing In...{% endif %}">
+                    <i class="bi {% if mode == 'signup' %}bi-person-plus{% else %}bi-box-arrow-in-right{% endif %} me-1"></i>
+                    {% if mode == 'signup' %}Create Account{% else %}Sign In{% endif %}
+                </button>
+
+                <div class="text-center">
+                    <a href="{{ url_for('index') }}" class="text-muted small text-decoration-none">
+                        <i class="bi bi-arrow-left me-1"></i> Back to Homepage
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleAuthPassword() {
+    const passwordInput = document.getElementById('password');
+    const icon = document.getElementById('toggleAuthPasswordIcon');
+    if (passwordInput.type === 'password') {
+        passwordInput.type = 'text';
+        icon.classList.remove('bi-eye');
+        icon.classList.add('bi-eye-slash');
+    } else {
+        passwordInput.type = 'password';
+        icon.classList.remove('bi-eye-slash');
+        icon.classList.add('bi-eye');
+    }
+}
+</script>
+{% endblock %}

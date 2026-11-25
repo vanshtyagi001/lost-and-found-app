@@ -1,6 +1,7 @@
 import os
 from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory, abort, session, jsonify
 from functools import wraps
+from werkzeug.security import check_password_hash, generate_password_hash
 import re
 from datetime import datetime
 
@@ -17,7 +18,7 @@ except ImportError as e:
     exit()
 
 try:
-    from models import db, Item
+    from models import db, Item, User
 except ImportError as e:
     print(f"CRITICAL ERROR: Could not import from models.py: {e}")
     print("Ensure models.py exists and defines db and Item.")
@@ -195,6 +196,82 @@ def uploaded_file(filename):
     try:
         return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=False)
     except FileNotFoundError: abort(404)
+
+# --- User Authentication Routes ---
+
+@app.route('/login', methods=['GET', 'POST'])
+def user_login_page():
+    """Handles user sign-in."""
+    if session.get('user_id'):
+        return redirect(url_for('index'))
+
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip().lower()
+        password = request.form.get('password', '')
+
+        user = User.query.filter_by(email=email).first()
+        if user and check_password_hash(user.password_hash, password):
+            session['user_id'] = user.id
+            session['user_name'] = user.name
+            session['user_email'] = user.email
+            flash(f'Welcome back, {user.name}!', 'success')
+            next_url = request.args.get('next')
+            if next_url and next_url.startswith('/') and not next_url.startswith('//'):
+                return redirect(next_url)
+            return redirect(url_for('index'))
+
+        flash('Invalid email or password. Please try again.', 'danger')
+        return render_template('auth.html', mode='login', entered_email=email)
+
+    return render_template('auth.html', mode='login', entered_email='')
+
+
+@app.route('/register', methods=['GET', 'POST'])
+def user_register_page():
+    """Handles new user sign-up."""
+    if session.get('user_id'):
+        return redirect(url_for('index'))
+
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        email = request.form.get('email', '').strip().lower()
+        password = request.form.get('password', '')
+
+        if not name or not email or not password:
+            flash('Full name, email, and password are required.', 'danger')
+            return render_template('auth.html', mode='signup', entered_name=name, entered_email=email)
+        if len(password) < 6:
+            flash('Password must be at least 6 characters.', 'danger')
+            return render_template('auth.html', mode='signup', entered_name=name, entered_email=email)
+        if User.query.filter_by(email=email).first():
+            flash('An account with this email already exists. Please sign in.', 'warning')
+            return render_template('auth.html', mode='login', entered_email=email)
+
+        user = User(
+            name=name,
+            email=email,
+            password_hash=generate_password_hash(password),
+        )
+        db.session.add(user)
+        db.session.commit()
+
+        session['user_id'] = user.id
+        session['user_name'] = user.name
+        session['user_email'] = user.email
+        flash(f'Account created! Welcome to Lost & Found, {user.name}.', 'success')
+        return redirect(url_for('index'))
+
+    return render_template('auth.html', mode='signup', entered_name='', entered_email='')
+
+
+@app.route('/logout')
+def user_logout_page():
+    """Logs out the current user."""
+    session.pop('user_id', None)
+    session.pop('user_name', None)
+    session.pop('user_email', None)
+    flash('You have been signed out.', 'info')
+    return redirect(url_for('index'))
 
 # --- Admin Authentication & Routes ---
 

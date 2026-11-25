@@ -314,3 +314,30 @@ def test_category_normalization_matches_legacy_and_android_labels(client, monkey
     )
     assert resp.status_code == 200
     assert resp.get_json()["match_count"] == 1
+
+
+def test_web_navbar_user_auth_and_direct_admin_route(client):
+    home = client.get("/")
+    assert home.status_code == 200
+    html = home.get_data(as_text=True)
+    assert "Sign In" in html
+    assert "Sign Up" in html
+    assert 'href="/admin"' not in html
+
+    # Direct /admin route still works (redirects to /admin/login)
+    admin_resp = client.get("/admin")
+    assert admin_resp.status_code == 302
+    assert "/admin/login" in admin_resp.headers["Location"]
+
+    # Web sign-up and sign-in
+    reg = client.post(
+        "/register",
+        data={"name": "Alice", "email": "alice@example.com", "password": "password123"},
+        follow_redirects=True,
+    )
+    assert reg.status_code == 200
+    assert "Alice" in reg.get_data(as_text=True)
+
+    logout = client.get("/logout", follow_redirects=True)
+    assert logout.status_code == 200
+    assert "Sign In" in logout.get_data(as_text=True)
