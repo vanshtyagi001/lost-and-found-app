@@ -56,6 +56,23 @@
                 </div>
 
                 <div class="mb-3">
+                    <label for="email" class="form-label small fw-semibold text-main mb-1">
+                        Email Address
+                    </label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-light text-muted"><i class="bi bi-envelope"></i></span>
+                        <input type="email"
+                               class="form-control bg-light text-muted"
+                               id="email"
+                               value="{{ user.email or '' }}"
+                               readonly
+                               disabled>
+                        <span class="input-group-text bg-light text-muted" title="Cannot be changed"><i class="bi bi-lock"></i></span>
+                    </div>
+                    <div class="form-text small text-muted">Email address is linked to your account and cannot be changed.</div>
+                </div>
+
+                <div class="mb-3">
                     <label for="phone" class="form-label small fw-semibold text-main mb-1">
                         Mobile Number <span class="text-danger">*</span>
                     </label>
