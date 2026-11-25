@@ -69,8 +69,8 @@
                         </li>
                     {% else %}
                         <li class="nav-item">
-                            <a class="btn btn-primary btn-sm px-3 fw-semibold" href="{{ url_for('user_login_page') }}">
-                                <i class="bi bi-box-arrow-in-right me-1"></i> Sign In
+                            <a class="nav-link {% if request.endpoint in ['user_login_page', 'user_register_page'] %}active{% endif %}" href="{{ url_for('user_login_page') }}">
+                                <i class="bi bi-person me-1"></i> Sign In
                             </a>
                         </li>
                     {% endif %}
