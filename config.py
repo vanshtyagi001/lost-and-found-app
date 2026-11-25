@@ -34,3 +34,9 @@ IMAGE_SIMILARITY_THRESHOLD = float(os.environ.get("IMAGE_SIMILARITY_THRESHOLD", 
 # --- Gemini Model Configuration ---
 GEMINI_MODEL_NAME = os.environ.get("GEMINI_MODEL_NAME", "gemini-3.1-flash-lite")
 GEMINI_TEMPERATURE = float(os.environ.get("GEMINI_TEMPERATURE", 0.2))
+
+# --- Google OAuth Configuration ---
+GOOGLE_CLIENT_ID = os.environ.get(
+    "GOOGLE_CLIENT_ID",
+    "249752098855-dmsafb74tfnecjdf5r4qqvgpbtilij28.apps.googleusercontent.com",
+)

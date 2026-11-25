@@ -341,3 +341,42 @@ def test_web_navbar_user_auth_and_direct_admin_route(client):
     logout = client.get("/logout", follow_redirects=True)
     assert logout.status_code == 200
     assert "Sign In" in logout.get_data(as_text=True)
+
+
+def test_google_signin_api_and_web(client, monkeypatch):
+    monkeypatch.setattr(
+        api_v1,
+        "verify_google_id_token",
+        lambda token: {
+            "email": "googleuser@example.com",
+            "email_verified": True,
+            "name": "Google User",
+        } if token == "valid-google-token" else None,
+    )
+    import app as flask_app
+    monkeypatch.setattr(
+        flask_app,
+        "verify_google_id_token",
+        lambda token: {
+            "email": "googleuser@example.com",
+            "email_verified": True,
+            "name": "Google User",
+        } if token == "valid-google-token" else None,
+    )
+
+    bad = client.post("/api/v1/auth/google", json={"id_token": "bad"})
+    assert bad.status_code == 401
+
+    good = client.post("/api/v1/auth/google", json={"id_token": "valid-google-token"})
+    assert good.status_code == 200
+    data = good.get_json()
+    assert data["user"]["email"] == "googleuser@example.com"
+    assert data["token"]
+
+    web_resp = client.post(
+        "/auth/google",
+        data={"credential": "valid-google-token"},
+        follow_redirects=True,
+    )
+    assert web_resp.status_code == 200
+    assert "Google User" in web_resp.get_data(as_text=True)

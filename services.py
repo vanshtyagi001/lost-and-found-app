@@ -1,8 +1,12 @@
 import os
 import re
+import secrets
 import time
 import google.generativeai as genai
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token as google_id_token
 from PIL import Image as PILImage
+from werkzeug.security import generate_password_hash
 from werkzeug.utils import secure_filename
 
 from config import (
@@ -10,12 +14,13 @@ from config import (
     GEMINI_IMAGE_API_KEY,
     GEMINI_MODEL_NAME,
     GEMINI_TEMPERATURE,
+    GOOGLE_CLIENT_ID,
     ALLOWED_EXTENSIONS,
     DESCRIPTION_SIMILARITY_THRESHOLD,
     METADATA_SIMILARITY_THRESHOLD,
     IMAGE_SIMILARITY_THRESHOLD,
 )
-from models import Item
+from models import Item, User, db
 
 ITEM_TYPES = [
     "Electronics",
@@ -325,3 +330,38 @@ def item_to_dict(item, image_url=None):
         "contact_info": item.contact_info,
         "timestamp": item.timestamp.isoformat() + "Z" if item.timestamp else None,
     }
+
+
+def verify_google_id_token(token):
+    """Verifies a Google ID token against GOOGLE_CLIENT_ID and returns its claims."""
+    if not token or not GOOGLE_CLIENT_ID:
+        return None
+    try:
+        idinfo = google_id_token.verify_oauth2_token(
+            token,
+            google_requests.Request(),
+            GOOGLE_CLIENT_ID,
+        )
+        if not idinfo.get("email") or not idinfo.get("email_verified"):
+            return None
+        return idinfo
+    except Exception as e:
+        print(f"Google ID token verification failed: {e}")
+        return None
+
+
+def get_or_create_google_user(idinfo):
+    """Finds an existing User by email or creates one for a verified Google account."""
+    email = idinfo["email"].strip().lower()
+    user = User.query.filter_by(email=email).first()
+    if user:
+        return user
+    name = (idinfo.get("name") or email.split("@")[0]).strip()
+    user = User(
+        name=name,
+        email=email,
+        password_hash=generate_password_hash(secrets.token_urlsafe(32)),
+    )
+    db.session.add(user)
+    db.session.commit()
+    return user

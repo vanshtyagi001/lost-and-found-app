@@ -18,8 +18,10 @@ from services import (
     allowed_file,
     find_matching_found_items,
     generate_description_gemini,
+    get_or_create_google_user,
     item_to_dict,
     save_uploaded_image,
+    verify_google_id_token,
 )
 
 api_v1 = Blueprint("api_v1", __name__, url_prefix="/api/v1")
@@ -307,6 +309,27 @@ def user_login():
     if not user or not check_password_hash(user.password_hash, password):
         return jsonify({"error": "Invalid email or password."}), 401
 
+    token = _get_serializer().dumps({"user_id": user.id, "email": user.email, "role": "user"})
+    return jsonify({
+        "token": token,
+        "expires_in": TOKEN_MAX_AGE_SECONDS,
+        "user": user.to_dict(),
+    }), 200
+
+
+@api_v1.route("/auth/google", methods=["POST"])
+def user_google_login():
+    """Verifies a Google ID token from Android/Web and returns a signed Bearer token."""
+    data = request.get_json(silent=True) or {}
+    id_token_str = (data.get("id_token") or "").strip()
+    if not id_token_str:
+        return jsonify({"error": "id_token is required."}), 400
+
+    idinfo = verify_google_id_token(id_token_str)
+    if not idinfo:
+        return jsonify({"error": "Invalid or unverified Google ID token."}), 401
+
+    user = get_or_create_google_user(idinfo)
     token = _get_serializer().dumps({"user_id": user.id, "email": user.email, "role": "user"})
     return jsonify({
         "token": token,

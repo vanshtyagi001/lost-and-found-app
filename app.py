@@ -10,7 +10,7 @@ try:
     from config import (
         SECRET_KEY, DATABASE_URI,
         UPLOAD_FOLDER, ALLOWED_EXTENSIONS,
-        ADMIN_USERNAME, ADMIN_PASSWORD
+        ADMIN_USERNAME, ADMIN_PASSWORD, GOOGLE_CLIENT_ID
     )
 except ImportError as e:
     print(f"CRITICAL ERROR: Could not import from config.py: {e}")
@@ -30,7 +30,9 @@ from services import (
     clean_ai_description,
     find_matching_found_items,
     generate_description_gemini,
+    get_or_create_google_user,
     save_uploaded_image,
+    verify_google_id_token,
 )
 from api_v1 import api_v1
 
@@ -221,9 +223,9 @@ def user_login_page():
             return redirect(url_for('index'))
 
         flash('Invalid email or password. Please try again.', 'danger')
-        return render_template('auth.html', mode='login', entered_email=email)
+        return render_template('auth.html', mode='login', entered_email=email, google_client_id=GOOGLE_CLIENT_ID)
 
-    return render_template('auth.html', mode='login', entered_email='')
+    return render_template('auth.html', mode='login', entered_email='', google_client_id=GOOGLE_CLIENT_ID)
 
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -239,13 +241,13 @@ def user_register_page():
 
         if not name or not email or not password:
             flash('Full name, email, and password are required.', 'danger')
-            return render_template('auth.html', mode='signup', entered_name=name, entered_email=email)
+            return render_template('auth.html', mode='signup', entered_name=name, entered_email=email, google_client_id=GOOGLE_CLIENT_ID)
         if len(password) < 6:
             flash('Password must be at least 6 characters.', 'danger')
-            return render_template('auth.html', mode='signup', entered_name=name, entered_email=email)
+            return render_template('auth.html', mode='signup', entered_name=name, entered_email=email, google_client_id=GOOGLE_CLIENT_ID)
         if User.query.filter_by(email=email).first():
             flash('An account with this email already exists. Please sign in.', 'warning')
-            return render_template('auth.html', mode='login', entered_email=email)
+            return render_template('auth.html', mode='login', entered_email=email, google_client_id=GOOGLE_CLIENT_ID)
 
         user = User(
             name=name,
@@ -261,7 +263,24 @@ def user_register_page():
         flash(f'Account created! Welcome to Lost & Found, {user.name}.', 'success')
         return redirect(url_for('index'))
 
-    return render_template('auth.html', mode='signup', entered_name='', entered_email='')
+    return render_template('auth.html', mode='signup', entered_name='', entered_email='', google_client_id=GOOGLE_CLIENT_ID)
+
+
+@app.route('/auth/google', methods=['POST'])
+def user_google_web_login():
+    """Verifies Google Identity Services credential token and signs in the web user."""
+    credential = request.form.get('credential', '').strip()
+    idinfo = verify_google_id_token(credential)
+    if not idinfo:
+        flash('Google Sign-In failed. Please try again.', 'danger')
+        return redirect(url_for('user_login_page'))
+
+    user = get_or_create_google_user(idinfo)
+    session['user_id'] = user.id
+    session['user_name'] = user.name
+    session['user_email'] = user.email
+    flash(f'Welcome, {user.name}!', 'success')
+    return redirect(url_for('index'))
 
 
 @app.route('/logout')
