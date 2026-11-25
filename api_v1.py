@@ -16,10 +16,12 @@ from models import Item, User, db
 from services import (
     ITEM_TYPES,
     allowed_file,
+    delete_item_image,
     find_matching_found_items,
     generate_description_gemini,
     get_or_create_google_user,
     item_to_dict,
+    save_found_image,
     save_uploaded_image,
     verify_google_id_token,
 )
@@ -65,6 +67,8 @@ def api_admin_required(f):
 def _build_image_url(filename):
     if not filename:
         return None
+    if filename.startswith(("http://", "https://")):
+        return filename
     return url_for("uploaded_file", filename=filename, _external=True)
 
 
@@ -142,9 +146,11 @@ def report_found():
         return jsonify({"error": "item_type, location, and contact_info are required."}), 400
 
     filepath = None
+    stored_ref = None
+    is_temp_local = False
     try:
         upload_folder = current_app.config["UPLOAD_FOLDER"]
-        filename, filepath = save_uploaded_image(file, upload_folder, prefix="found")
+        stored_ref, filepath, is_temp_local = save_found_image(file, upload_folder)
 
         ai_description = generate_description_gemini(filepath)
         ai_warning = None
@@ -164,7 +170,7 @@ def report_found():
             color=color,
             brand=brand,
             location=location,
-            image_filename=filename,
+            image_filename=stored_ref,
             ai_description=ai_description,
             contact_info=contact_info,
         )
@@ -178,12 +184,15 @@ def report_found():
         }), 201
     except Exception as e:
         db.session.rollback()
-        if filepath and os.path.exists(filepath):
+        if stored_ref:
+            delete_item_image(stored_ref, current_app.config["UPLOAD_FOLDER"])
+        return jsonify({"error": f"Failed to report found item: {e}"}), 500
+    finally:
+        if is_temp_local and filepath and os.path.exists(filepath):
             try:
                 os.remove(filepath)
             except OSError:
                 pass
-        return jsonify({"error": f"Failed to report found item: {e}"}), 500
 
 
 @api_v1.route("/search-lost", methods=["POST"])
@@ -362,10 +371,7 @@ def admin_delete_item(item_id):
         return jsonify({"error": f"Item {item_id} not found."}), 404
 
     try:
-        if item.image_filename:
-            image_path = os.path.join(current_app.config["UPLOAD_FOLDER"], item.image_filename)
-            if os.path.exists(image_path) and os.path.isfile(image_path):
-                os.remove(image_path)
+        delete_item_image(item.image_filename, current_app.config["UPLOAD_FOLDER"])
 
         db.session.delete(item)
         db.session.commit()
@@ -385,14 +391,8 @@ def admin_clear_all():
         upload_folder = current_app.config["UPLOAD_FOLDER"]
 
         for item in items:
-            if item.image_filename:
-                image_path = os.path.join(upload_folder, item.image_filename)
-                if os.path.exists(image_path) and os.path.isfile(image_path):
-                    try:
-                        os.remove(image_path)
-                        deleted_files_count += 1
-                    except OSError:
-                        pass
+            if delete_item_image(item.image_filename, upload_folder):
+                deleted_files_count += 1
 
         num_deleted = Item.query.delete()
         db.session.commit()

@@ -94,7 +94,7 @@
                 <div class="item-card">
                     <!-- Clean Photo Container -->
                     <div class="item-card-img-wrap">
-                        <img src="{{ url_for('uploaded_file', filename=item.image_filename) }}" 
+                        <img src="{{ item.image_filename | item_image_url }}" 
                              alt="{{ item.item_type }}"
                              data-bs-toggle="modal"
                              data-bs-target="#itemModal{{ item.id }}"
@@ -176,7 +176,7 @@
                 {% for item in items %}
                     <tr class="item-table-row" data-status="{{ item.status }}" data-search-content="{{ item.id }} {{ item.item_type|lower }} {{ item.location|lower }} {{ (item.brand or '')|lower }} {{ (item.color or '')|lower }} {{ item.contact_info|lower }}">
                         <td>
-                            <img src="{{ url_for('uploaded_file', filename=item.image_filename) }}" 
+                            <img src="{{ item.image_filename | item_image_url }}" 
                                  class="admin-thumb" 
                                  alt="{{ item.item_type }}"
                                  data-bs-toggle="modal" 
@@ -255,7 +255,7 @@
                             <!-- Image Column -->
                             <div class="col-md-5">
                                 <div class="border rounded p-2 bg-light text-center h-100 d-flex align-items-center justify-content-center">
-                                    <img src="{{ url_for('uploaded_file', filename=item.image_filename) }}" 
+                                    <img src="{{ item.image_filename | item_image_url }}" 
                                          alt="{{ item.item_type }}" 
                                          class="img-fluid rounded" 
                                          style="max-height: 280px; object-fit: contain;">

@@ -1,8 +1,12 @@
+import io
 import os
 import re
 import secrets
 import time
+import cloudinary
+import cloudinary.uploader
 import google.generativeai as genai
+import requests
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
 from PIL import Image as PILImage
@@ -15,12 +19,16 @@ from config import (
     GEMINI_MODEL_NAME,
     GEMINI_TEMPERATURE,
     GOOGLE_CLIENT_ID,
+    CLOUDINARY_URL,
     ALLOWED_EXTENSIONS,
     DESCRIPTION_SIMILARITY_THRESHOLD,
     METADATA_SIMILARITY_THRESHOLD,
     IMAGE_SIMILARITY_THRESHOLD,
 )
 from models import Item, User, db
+
+if CLOUDINARY_URL:
+    cloudinary.config(cloudinary_url=CLOUDINARY_URL)
 
 ITEM_TYPES = [
     "Electronics",
@@ -57,12 +65,18 @@ def allowed_file(filename, allowed_extensions=ALLOWED_EXTENSIONS):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in allowed_extensions
 
 
-def optimize_image_for_ai(image_path, max_dim=1024):
+def optimize_image_for_ai(image_source, max_dim=1024):
     """
-    Opens an image and resizes it so max dimension <= max_dim.
+    Opens a local path or http(s) image URL and resizes it so max dimension <= max_dim.
     Reduces RAM and bandwidth on constrained hosts like Render.
     """
-    img = PILImage.open(image_path)
+    if isinstance(image_source, str) and image_source.startswith(("http://", "https://")):
+        resp = requests.get(image_source, timeout=20)
+        resp.raise_for_status()
+        img = PILImage.open(io.BytesIO(resp.content))
+    else:
+        img = PILImage.open(image_source)
+
     if img.mode != "RGB":
         img = img.convert("RGB")
     if max(img.size) > max_dim:
@@ -142,18 +156,19 @@ def compare_descriptions_gemini(desc1, desc2):
         return 0.0
 
 
-def compare_images_gemini(image_path1, image_path2):
-    """Compares two images for visual similarity using Gemini Vision."""
-    if not vision_model:
+def compare_images_gemini(image_source1, image_source2):
+    """Compares two images (local paths or URLs) for visual similarity using Gemini Vision."""
+    if not vision_model or not image_source1 or not image_source2:
         return 0.0
-    if not os.path.exists(image_path1) or not os.path.exists(image_path2):
-        return 0.0
+    for src in (image_source1, image_source2):
+        if not src.startswith(("http://", "https://")) and not os.path.exists(src):
+            return 0.0
 
     try:
         if GEMINI_IMAGE_API_KEY and GEMINI_IMAGE_API_KEY != "YOUR API KEY":
             genai.configure(api_key=GEMINI_IMAGE_API_KEY)
-        img1 = optimize_image_for_ai(image_path1, max_dim=512)
-        img2 = optimize_image_for_ai(image_path2, max_dim=512)
+        img1 = optimize_image_for_ai(image_source1, max_dim=512)
+        img2 = optimize_image_for_ai(image_source2, max_dim=512)
         prompt = """
         On a scale of 0.0 to 1.0, how visually similar are the items in these two images?
         Respond ONLY with the numerical score (e.g., 0.90).
@@ -255,6 +270,67 @@ def save_uploaded_image(file_storage, upload_folder, prefix="found"):
     return filename, filepath
 
 
+def save_found_image(file_storage, upload_folder):
+    """
+    Saves a found-item photo to Cloudinary (if CLOUDINARY_URL is configured) or local disk.
+    Returns (stored_ref, local_filepath, is_temp_local).
+    """
+    filename, filepath = save_uploaded_image(file_storage, upload_folder, prefix="found")
+    if CLOUDINARY_URL:
+        result = cloudinary.uploader.upload(
+            filepath,
+            folder="lost_and_found",
+            resource_type="image",
+        )
+        secure_url = result["secure_url"]
+        return secure_url, filepath, True
+    return filename, filepath, False
+
+
+def resolve_image_source(image_filename, upload_folder):
+    """Returns a URL or local filesystem path for an Item's stored image_filename."""
+    if not image_filename:
+        return None
+    if image_filename.startswith(("http://", "https://")):
+        return image_filename
+    return os.path.join(upload_folder, image_filename)
+
+
+def _extract_cloudinary_public_id(url):
+    if "/upload/" not in url:
+        return None
+    right = url.split("/upload/", 1)[1]
+    right = re.sub(r"^v\d+/", "", right)
+    public_id, _ = os.path.splitext(right)
+    return public_id or None
+
+
+def delete_item_image(image_filename, upload_folder):
+    """Deletes an item's image from Cloudinary or local disk. Returns True if deleted."""
+    if not image_filename:
+        return False
+    if image_filename.startswith(("http://", "https://")):
+        if not CLOUDINARY_URL:
+            return False
+        public_id = _extract_cloudinary_public_id(image_filename)
+        if not public_id:
+            return False
+        try:
+            res = cloudinary.uploader.destroy(public_id, resource_type="image")
+            return res.get("result") in ("ok", "not found")
+        except Exception as e:
+            print(f"Cloudinary delete failed for {public_id}: {e}")
+            return False
+    image_path = os.path.join(upload_folder, image_filename)
+    if os.path.exists(image_path) and os.path.isfile(image_path):
+        try:
+            os.remove(image_path)
+            return True
+        except OSError as e:
+            print(f"Could not delete local image {image_path}: {e}")
+    return False
+
+
 def find_matching_found_items(lost_item_details, upload_folder):
     """
     Runs the three-tier matching pipeline against all 'found' items in the DB.
@@ -290,9 +366,11 @@ def find_matching_found_items(lost_item_details, upload_folder):
         # Tier 3: Direct Visual Similarity (Gemini Vision) — only when a search image is provided
         if lost_item_details.get("image_path"):
             img_similarity = 0.0
-            found_image_path = os.path.join(upload_folder, found_item.image_filename)
-            if os.path.exists(found_image_path):
-                img_similarity = compare_images_gemini(lost_item_details["image_path"], found_image_path)
+            found_image_source = resolve_image_source(found_item.image_filename, upload_folder)
+            if found_image_source and (
+                found_image_source.startswith(("http://", "https://")) or os.path.exists(found_image_source)
+            ):
+                img_similarity = compare_images_gemini(lost_item_details["image_path"], found_image_source)
                 match_scores["image"] = round(img_similarity, 4)
 
             if img_similarity < IMAGE_SIMILARITY_THRESHOLD:

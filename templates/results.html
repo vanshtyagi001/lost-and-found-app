@@ -52,7 +52,7 @@
                          data-bs-toggle="modal" 
                          data-bs-target="#matchModal{{ match.found_item.id }}"
                          title="Click to view full image and match details">
-                        <img src="{{ url_for('uploaded_file', filename=match.found_item.image_filename) }}" 
+                        <img src="{{ match.found_item.image_filename | item_image_url }}" 
                              alt="{{ match.found_item.item_type }}">
                         <div class="item-card-expand-badge">
                             <i class="bi bi-arrows-fullscreen me-1"></i>Expand
@@ -172,7 +172,7 @@
                             <!-- Image Column (Full Uncropped Image) -->
                             <div class="col-md-5">
                                 <div class="border rounded p-2 bg-light text-center h-100 d-flex align-items-center justify-content-center">
-                                    <img src="{{ url_for('uploaded_file', filename=match.found_item.image_filename) }}" 
+                                    <img src="{{ match.found_item.image_filename | item_image_url }}" 
                                          alt="{{ match.found_item.item_type }}" 
                                          class="img-fluid rounded" 
                                          style="max-height: 320px; object-fit: contain;">

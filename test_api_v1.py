@@ -1,5 +1,6 @@
 import io
 import os
+os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 import pytest
 from PIL import Image as PILImage
 
@@ -20,6 +21,7 @@ def client(tmp_path, monkeypatch):
     app.config["TESTING"] = True
     app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
     app.config["UPLOAD_FOLDER"] = str(upload_dir)
+    monkeypatch.setattr(services, "CLOUDINARY_URL", "")
 
     with app.app_context():
         db.drop_all()
@@ -380,3 +382,49 @@ def test_google_signin_api_and_web(client, monkeypatch):
     )
     assert web_resp.status_code == 200
     assert "Google User" in web_resp.get_data(as_text=True)
+
+
+def test_cloudinary_upload_and_delete(client, monkeypatch):
+    monkeypatch.setattr(services, "CLOUDINARY_URL", "cloudinary://key:secret@cloud")
+    monkeypatch.setattr(api_v1, "generate_description_gemini", lambda path: "Red umbrella.")
+    destroyed = []
+
+    monkeypatch.setattr(
+        services.cloudinary.uploader,
+        "upload",
+        lambda path, **kwargs: {
+            "secure_url": "https://res.cloudinary.com/cloud/image/upload/v12345/lost_and_found/umbrella.jpg"
+        },
+    )
+    monkeypatch.setattr(
+        services.cloudinary.uploader,
+        "destroy",
+        lambda public_id, **kwargs: destroyed.append(public_id) or {"result": "ok"},
+    )
+
+    resp = client.post(
+        "/api/v1/report-found",
+        data={
+            "item_type": "Other",
+            "location": "Main Gate",
+            "contact_info": "desk@example.com",
+            "item_image": (_make_jpeg_bytes((200, 0, 0)), "umbrella.jpg"),
+        },
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 201
+    item = resp.get_json()["item"]
+    assert item["image_url"] == "https://res.cloudinary.com/cloud/image/upload/v12345/lost_and_found/umbrella.jpg"
+    assert os.listdir(app.config["UPLOAD_FOLDER"]) == []
+
+    login_resp = client.post(
+        "/api/v1/admin/login",
+        json={"username": ADMIN_USERNAME, "password": ADMIN_PASSWORD},
+    )
+    token = login_resp.get_json()["token"]
+    del_resp = client.delete(
+        f"/api/v1/admin/items/{item['id']}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert del_resp.status_code == 200
+    assert destroyed == ["lost_and_found/umbrella"]

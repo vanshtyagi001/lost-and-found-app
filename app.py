@@ -28,9 +28,11 @@ from services import (
     ITEM_TYPES,
     allowed_file,
     clean_ai_description,
+    delete_item_image,
     find_matching_found_items,
     generate_description_gemini,
     get_or_create_google_user,
+    save_found_image,
     save_uploaded_image,
     verify_google_id_token,
 )
@@ -41,6 +43,10 @@ app = Flask(__name__)
 try:
     app.config['SECRET_KEY'] = SECRET_KEY
     app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URI
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'pool_pre_ping': True,
+        'pool_recycle': 280,
+    }
     app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
     app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024 # 16MB max upload size
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -90,6 +96,15 @@ def render_markdown_filter(text):
     content = content.replace('\n', '<br>')
     return Markup(content)
 
+@app.template_filter('item_image_url')
+def item_image_url_filter(image_filename):
+    """Returns direct cloud URL if stored remotely, else local /uploads/ route."""
+    if not image_filename:
+        return ''
+    if image_filename.startswith(('http://', 'https://')):
+        return image_filename
+    return url_for('uploaded_file', filename=image_filename)
+
 # --- Context Processor ---
 @app.context_processor
 def inject_now():
@@ -117,9 +132,11 @@ def report_found():
         if not file or not allowed_file(file.filename, app.config['ALLOWED_EXTENSIONS']): flash('Invalid file type. Allowed types: png, jpg, jpeg, gif', 'danger'); return render_template('report_found.html', item_types=item_types, entered_data=request.form)
 
         filepath = None
+        stored_ref = None
+        is_temp_local = False
         try:
-            filename, filepath = save_uploaded_image(file, app.config['UPLOAD_FOLDER'], prefix="found")
-            print(f"Image saved to: {filepath}")
+            stored_ref, filepath, is_temp_local = save_found_image(file, app.config['UPLOAD_FOLDER'])
+            print(f"Image saved as: {stored_ref}")
 
             ai_description = generate_description_gemini(filepath)
             if ai_description.startswith("Error:"): flash(f'AI description failed: {ai_description}. Item saved.', 'warning'); ai_description = "AI description generation failed."
@@ -132,7 +149,7 @@ def report_found():
                 color=color,
                 brand=brand,
                 location=location,
-                image_filename=filename,
+                image_filename=stored_ref,
                 ai_description=ai_description,
                 contact_info=contact_info,
             )
@@ -143,10 +160,13 @@ def report_found():
             return redirect(url_for('index'))
         except Exception as e:
             db.session.rollback(); flash(f'An error occurred: {e}', 'danger'); print(f"Error reporting found item: {e}")
-            if filepath and os.path.exists(filepath):
-                 try: os.remove(filepath); print(f"Cleaned up failed upload: {filepath}")
-                 except OSError as rm_err: print(f"Error removing file after failure: {rm_err}")
+            if stored_ref:
+                delete_item_image(stored_ref, app.config['UPLOAD_FOLDER'])
             return render_template('report_found.html', item_types=item_types, entered_data=request.form) # Return to form
+        finally:
+            if is_temp_local and filepath and os.path.exists(filepath):
+                try: os.remove(filepath)
+                except OSError: pass
 
     # GET request
     return render_template('report_found.html', item_types=item_types, entered_data={})
@@ -347,11 +367,7 @@ def admin_delete_item(item_id):
     """Deletes an item from the database and removes its uploaded image."""
     item = Item.query.get_or_404(item_id)
     try:
-        if item.image_filename:
-            image_path = os.path.join(app.config['UPLOAD_FOLDER'], item.image_filename)
-            if os.path.exists(image_path) and os.path.isfile(image_path):
-                os.remove(image_path)
-                print(f"Admin deleted image file: {image_path}")
+        delete_item_image(item.image_filename, app.config['UPLOAD_FOLDER'])
 
         db.session.delete(item)
         db.session.commit()
@@ -371,14 +387,8 @@ def admin_clear_all():
         items = Item.query.all()
         deleted_files_count = 0
         for item in items:
-            if item.image_filename:
-                image_path = os.path.join(app.config['UPLOAD_FOLDER'], item.image_filename)
-                if os.path.exists(image_path) and os.path.isfile(image_path):
-                    try:
-                        os.remove(image_path)
-                        deleted_files_count += 1
-                    except OSError as err:
-                        print(f"Could not delete image {image_path}: {err}")
+            if delete_item_image(item.image_filename, app.config['UPLOAD_FOLDER']):
+                deleted_files_count += 1
 
         num_deleted = Item.query.delete()
         db.session.commit()

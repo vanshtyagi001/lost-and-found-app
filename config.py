@@ -40,3 +40,6 @@ GOOGLE_CLIENT_ID = os.environ.get(
     "GOOGLE_CLIENT_ID",
     "249752098855-dmsafb74tfnecjdf5r4qqvgpbtilij28.apps.googleusercontent.com",
 )
+
+# --- Cloudinary Image Storage (Optional; falls back to local UPLOAD_FOLDER if unset) ---
+CLOUDINARY_URL = os.environ.get("CLOUDINARY_URL", "").strip()

@@ -7,5 +7,7 @@ werkzeug
 markdown-it-py
 gunicorn
 psycopg2-binary
+psycopg[binary]
 google-auth
 requests
+cloudinary

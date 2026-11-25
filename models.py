@@ -10,7 +10,7 @@ class Item(db.Model):
     color = db.Column(db.String(50), nullable=True)
     brand = db.Column(db.String(100), nullable=True)
     location = db.Column(db.String(200), nullable=False)
-    image_filename = db.Column(db.String(200), nullable=False)
+    image_filename = db.Column(db.String(500), nullable=False)
     ai_description = db.Column(db.Text, nullable=True)
     contact_info = db.Column(db.String(200), nullable=False) # WARNING: Store securely in real app
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
