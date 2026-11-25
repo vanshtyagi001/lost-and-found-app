@@ -46,11 +46,26 @@ class User(db.Model):
     name = db.Column(db.String(120), nullable=False)
     email = db.Column(db.String(200), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(256), nullable=False)
+    avatar_url = db.Column(db.String(500), nullable=True)
+    phone = db.Column(db.String(30), nullable=True)
+    address = db.Column(db.String(300), nullable=True)
+    city = db.Column(db.String(100), nullable=True)
+    alternate_contact = db.Column(db.String(150), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    @property
+    def is_profile_complete(self):
+        return bool(self.phone and self.address)
 
     def to_dict(self):
         return {
             "id": self.id,
             "name": self.name,
             "email": self.email,
+            "avatar_url": self.avatar_url,
+            "phone": self.phone,
+            "address": self.address,
+            "city": self.city,
+            "alternate_contact": self.alternate_contact,
+            "profile_complete": self.is_profile_complete,
         }

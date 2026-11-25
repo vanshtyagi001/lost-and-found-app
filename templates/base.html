@@ -52,25 +52,25 @@
                 <ul class="navbar-nav align-items-lg-center gap-1">
                     {% if session.get('user_id') %}
                         <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle d-flex align-items-center gap-1" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="bi bi-person-circle text-primary"></i>
+                            <a class="nav-link dropdown-toggle d-flex align-items-center gap-2" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                {% if session.get('user_avatar') %}
+                                    <img src="{{ session.get('user_avatar') }}" alt="Profile" width="26" height="26" class="rounded-circle object-fit-cover border" referrerpolicy="no-referrer">
+                                {% else %}
+                                    <i class="bi bi-person-circle text-primary fs-5"></i>
+                                {% endif %}
                                 <span>{{ session.get('user_name', 'Account') }}</span>
                             </a>
                             <ul class="dropdown-menu dropdown-menu-end shadow-sm border py-1">
                                 <li><span class="dropdown-item-text small text-muted">{{ session.get('user_email', '') }}</span></li>
                                 <li><hr class="dropdown-divider my-1"></li>
+                                <li><a class="dropdown-item small" href="{{ url_for('user_profile_page') }}"><i class="bi bi-person-gear me-2"></i>My Profile</a></li>
                                 <li><a class="dropdown-item small text-danger" href="{{ url_for('user_logout_page') }}"><i class="bi bi-box-arrow-right me-2"></i>Sign Out</a></li>
                             </ul>
                         </li>
                     {% else %}
                         <li class="nav-item">
-                            <a class="nav-link {% if request.endpoint == 'user_login_page' %}active{% endif %}" href="{{ url_for('user_login_page') }}">
-                                Sign In
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="btn btn-primary btn-sm px-3 ms-lg-1 fw-semibold" href="{{ url_for('user_register_page') }}">
-                                Sign Up
+                            <a class="btn btn-primary btn-sm px-3 fw-semibold" href="{{ url_for('user_login_page') }}">
+                                <i class="bi bi-box-arrow-in-right me-1"></i> Sign In
                             </a>
                         </li>
                     {% endif %}

@@ -323,7 +323,7 @@ def test_web_navbar_user_auth_and_direct_admin_route(client):
     assert home.status_code == 200
     html = home.get_data(as_text=True)
     assert "Sign In" in html
-    assert "Sign Up" in html
+    assert "Sign Up" not in html
     assert 'href="/admin"' not in html
 
     # Direct /admin route still works (redirects to /admin/login)
@@ -331,14 +331,30 @@ def test_web_navbar_user_auth_and_direct_admin_route(client):
     assert admin_resp.status_code == 302
     assert "/admin/login" in admin_resp.headers["Location"]
 
-    # Web sign-up and sign-in
+    # Web sign-up redirects to profile setup, and existing users can update /profile
     reg = client.post(
         "/register",
         data={"name": "Alice", "email": "alice@example.com", "password": "password123"},
         follow_redirects=True,
     )
     assert reg.status_code == 200
-    assert "Alice" in reg.get_data(as_text=True)
+    reg_html = reg.get_data(as_text=True)
+    assert "Complete Your Profile" in reg_html
+    assert "strictly private" in reg_html
+
+    prof = client.post(
+        "/profile",
+        data={
+            "name": "Alice",
+            "phone": "+919876543210",
+            "address": "Hostel A, Room 101",
+            "city": "Delhi",
+            "from_setup": "1",
+        },
+        follow_redirects=True,
+    )
+    assert prof.status_code == 200
+    assert "My Profile" in prof.get_data(as_text=True)
 
     logout = client.get("/logout", follow_redirects=True)
     assert logout.status_code == 200
@@ -353,6 +369,7 @@ def test_google_signin_api_and_web(client, monkeypatch):
             "email": "googleuser@example.com",
             "email_verified": True,
             "name": "Google User",
+            "picture": "https://lh3.googleusercontent.com/a/avatar.jpg",
         } if token == "valid-google-token" else None,
     )
     import app as flask_app
@@ -363,6 +380,7 @@ def test_google_signin_api_and_web(client, monkeypatch):
             "email": "googleuser@example.com",
             "email_verified": True,
             "name": "Google User",
+            "picture": "https://lh3.googleusercontent.com/a/avatar.jpg",
         } if token == "valid-google-token" else None,
     )
 
@@ -373,6 +391,7 @@ def test_google_signin_api_and_web(client, monkeypatch):
     assert good.status_code == 200
     data = good.get_json()
     assert data["user"]["email"] == "googleuser@example.com"
+    assert data["user"]["avatar_url"] == "https://lh3.googleusercontent.com/a/avatar.jpg"
     assert data["token"]
 
     web_resp = client.post(
@@ -381,7 +400,10 @@ def test_google_signin_api_and_web(client, monkeypatch):
         follow_redirects=True,
     )
     assert web_resp.status_code == 200
-    assert "Google User" in web_resp.get_data(as_text=True)
+    web_html = web_resp.get_data(as_text=True)
+    assert "Google User" in web_html
+    assert "https://lh3.googleusercontent.com/a/avatar.jpg" in web_html
+    assert "Complete Your Profile" in web_html
 
 
 def test_cloudinary_upload_and_delete(client, monkeypatch):

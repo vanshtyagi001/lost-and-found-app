@@ -431,13 +431,18 @@ def verify_google_id_token(token):
 def get_or_create_google_user(idinfo):
     """Finds an existing User by email or creates one for a verified Google account."""
     email = idinfo["email"].strip().lower()
+    picture = (idinfo.get("picture") or "").strip() or None
     user = User.query.filter_by(email=email).first()
     if user:
+        if picture and user.avatar_url != picture:
+            user.avatar_url = picture
+            db.session.commit()
         return user
     name = (idinfo.get("name") or email.split("@")[0]).strip()
     user = User(
         name=name,
         email=email,
+        avatar_url=picture,
         password_hash=generate_password_hash(secrets.token_urlsafe(32)),
     )
     db.session.add(user)

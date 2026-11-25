@@ -57,6 +57,27 @@ except Exception as e:
     print(f"CRITICAL ERROR: Failed to set Flask config values: {e}")
     exit()
 
+def _ensure_user_profile_columns():
+    """Safely adds new User profile columns if running against an existing database."""
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(db.engine)
+    if "user" not in inspector.get_table_names():
+        return
+    existing = {col["name"] for col in inspector.get_columns("user")}
+    new_cols = {
+        "avatar_url": "VARCHAR(500)",
+        "phone": "VARCHAR(30)",
+        "address": "VARCHAR(300)",
+        "city": "VARCHAR(100)",
+        "alternate_contact": "VARCHAR(150)",
+    }
+    for col_name, col_type in new_cols.items():
+        if col_name not in existing:
+            db.session.execute(text(f'ALTER TABLE "user" ADD COLUMN {col_name} {col_type}'))
+    db.session.commit()
+
+
 # Initialize SQLAlchemy
 try:
     db.init_app(app)
@@ -66,6 +87,7 @@ try:
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     with app.app_context():
         db.create_all()
+        _ensure_user_profile_columns()
         print("Database tables initialized successfully.")
     print(f"Upload directory verified: {app.config['UPLOAD_FOLDER']}")
 except Exception as e:
@@ -236,7 +258,10 @@ def user_login_page():
             session['user_id'] = user.id
             session['user_name'] = user.name
             session['user_email'] = user.email
+            session['user_avatar'] = user.avatar_url
             flash(f'Welcome back, {user.name}!', 'success')
+            if not user.is_profile_complete:
+                return redirect(url_for('user_profile_page', setup=1))
             next_url = request.args.get('next')
             if next_url and next_url.startswith('/') and not next_url.startswith('//'):
                 return redirect(next_url)
@@ -280,8 +305,9 @@ def user_register_page():
         session['user_id'] = user.id
         session['user_name'] = user.name
         session['user_email'] = user.email
-        flash(f'Account created! Welcome to Lost & Found, {user.name}.', 'success')
-        return redirect(url_for('index'))
+        session['user_avatar'] = user.avatar_url
+        flash(f'Account created! Please complete your private profile details.', 'info')
+        return redirect(url_for('user_profile_page', setup=1))
 
     return render_template('auth.html', mode='signup', entered_name='', entered_email='', google_client_id=GOOGLE_CLIENT_ID)
 
@@ -299,8 +325,53 @@ def user_google_web_login():
     session['user_id'] = user.id
     session['user_name'] = user.name
     session['user_email'] = user.email
-    flash(f'Welcome, {user.name}!', 'success')
+    session['user_avatar'] = user.avatar_url
+    if not user.is_profile_complete:
+        flash(f'Welcome, {user.name}! Please complete your profile to continue.', 'info')
+        return redirect(url_for('user_profile_page', setup=1))
+    flash(f'Welcome back, {user.name}!', 'success')
     return redirect(url_for('index'))
+
+
+@app.route('/profile', methods=['GET', 'POST'])
+def user_profile_page():
+    """Allows signed-in users to complete or update their private profile details."""
+    user_id = session.get('user_id')
+    if not user_id:
+        flash('Please sign in to view or update your profile.', 'warning')
+        return redirect(url_for('user_login_page', next='/profile'))
+
+    user = db.session.get(User, user_id)
+    if not user:
+        session.clear()
+        return redirect(url_for('user_login_page'))
+
+    is_setup = request.args.get('setup') == '1' or not user.is_profile_complete
+
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        phone = request.form.get('phone', '').strip()
+        address = request.form.get('address', '').strip()
+        city = request.form.get('city', '').strip() or None
+        alternate_contact = request.form.get('alternate_contact', '').strip() or None
+
+        if not name or not phone or not address:
+            flash('Full Name, Mobile Number, and Stay Address are required.', 'danger')
+            return render_template('profile.html', user=user, is_setup=is_setup)
+
+        user.name = name
+        user.phone = phone
+        user.address = address
+        user.city = city
+        user.alternate_contact = alternate_contact
+        db.session.commit()
+
+        session['user_name'] = user.name
+        session['user_avatar'] = user.avatar_url
+        flash('Your profile has been saved securely.', 'success')
+        return redirect(url_for('index') if request.form.get('from_setup') == '1' else url_for('user_profile_page'))
+
+    return render_template('profile.html', user=user, is_setup=is_setup)
 
 
 @app.route('/logout')
@@ -309,6 +380,7 @@ def user_logout_page():
     session.pop('user_id', None)
     session.pop('user_name', None)
     session.pop('user_email', None)
+    session.pop('user_avatar', None)
     flash('You have been signed out.', 'info')
     return redirect(url_for('index'))
 
