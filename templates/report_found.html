@@ -27,36 +27,41 @@
             </div>
 
             <div class="mb-3">
-                <label for="item_type" class="form-label fw-semibold">Item Type*</label>
+                <label for="item_type" class="form-label fw-semibold">Item Category*</label>
                 <select class="form-select" id="item_type" name="item_type" required>
-                    <option value="" disabled selected>Select item type...</option>
+                    <option value="" disabled selected>Select category...</option>
                     {% for type in item_types %}
                         <option value="{{ type }}">{{ type }}</option>
                     {% endfor %}
                 </select>
             </div>
 
-            <div class="row mb-3">
-                <div class="col-md-6">
-                    <label for="color" class="form-label fw-semibold">Color</label>
-                    <input type="text" class="form-control" id="color" name="color" placeholder="e.g., Blue, Silver, Multicolor">
-                </div>
-                <div class="col-md-6 mt-3 mt-md-0">
-                    <label for="brand" class="form-label fw-semibold">Brand (if known)</label>
-                    <input type="text" class="form-control" id="brand" name="brand" placeholder="e.g., Apple, Timex, Nike">
+            <div class="mb-3">
+                <label for="location" class="form-label fw-semibold">Location Found*</label>
+                <input type="text" class="form-control" id="location" name="location" placeholder="e.g., Main Library 2nd Floor" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="contact_info" class="form-label fw-semibold">Your Contact Info* (Email or Phone)</label>
+                <input type="text" class="form-control" id="contact_info" name="contact_info" placeholder="Email or phone number" required>
+                <div class="form-text text-muted">
+                    <i class="bi bi-lock me-1"></i> This contact information is only shared with potential owners when a confirmed match is found.
                 </div>
             </div>
 
             <div class="mb-3">
-                <label for="location" class="form-label fw-semibold">Location Found*</label>
-                <input type="text" class="form-control" id="location" name="location" placeholder="e.g., Central Park Bench, Library Room 201" required>
+                <label for="description" class="form-label fw-semibold">Description / Identifying Marks (Optional)</label>
+                <textarea class="form-control" id="description" name="description" rows="2" placeholder="e.g., Found on table near window, has a sticker"></textarea>
             </div>
 
-            <div class="mb-4">
-                <label for="contact_info" class="form-label fw-semibold">Your Contact Information* (Email or Phone)</label>
-                <input type="text" class="form-control" id="contact_info" name="contact_info" placeholder="How someone can contact you" required>
-                <div class="form-text text-muted">
-                    <i class="bi bi-lock me-1"></i> This contact information is only shared with potential owners when a confirmed match is found.
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <label for="color" class="form-label fw-semibold">Color (Optional)</label>
+                    <input type="text" class="form-control" id="color" name="color" placeholder="e.g., Blue, Silver, Multicolor">
+                </div>
+                <div class="col-md-6 mt-3 mt-md-0">
+                    <label for="brand" class="form-label fw-semibold">Brand (Optional)</label>
+                    <input type="text" class="form-control" id="brand" name="brand" placeholder="e.g., Apple, Timex, Nike">
                 </div>
             </div>
 

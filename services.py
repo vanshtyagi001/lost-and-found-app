@@ -32,14 +32,12 @@ if CLOUDINARY_URL:
 
 ITEM_TYPES = [
     "Electronics",
-    "Keys",
-    "Wallet/Purse",
+    "Keys & Wallet",
+    "Pets",
+    "Bags & Luggage",
+    "Documents",
     "Clothing",
-    "Bag/Backpack",
-    "Jewelry/Watch",
-    "Book/Notebook",
-    "Pet",
-    "Identification",
+    "Jewelry & Watch",
     "Other",
 ]
 

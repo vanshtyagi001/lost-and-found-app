@@ -163,6 +163,13 @@ def report_found():
             ai_description = generate_description_gemini(filepath)
             if ai_description.startswith("Error:"): flash(f'AI description failed: {ai_description}. Item saved.', 'warning'); ai_description = "AI description generation failed."
 
+            user_description = (request.form.get('description') or '').strip()
+            if user_description:
+                if ai_description == "AI description generation failed.":
+                    ai_description = user_description
+                else:
+                    ai_description = f"{ai_description}\n\nFinder notes: {user_description}"
+
             color = request.form.get('color')
             brand = request.form.get('brand')
             new_item = Item(
@@ -212,6 +219,14 @@ def search_lost():
 
             lost_ai_description = generate_description_gemini(search_filepath)
             if lost_ai_description.startswith("Error:"): flash(f'AI description failed: {lost_ai_description}. Search quality might be affected.', 'warning'); lost_ai_description = ""
+
+            user_description = (request.form.get('description') or '').strip()
+            if user_description:
+                lost_ai_description = (
+                    f"{lost_ai_description}\nUser notes: {user_description}".strip()
+                    if lost_ai_description
+                    else user_description
+                )
 
             lost_item_details = {"item_type": item_type.lower(), "color": request.form.get('color', '').lower(), "brand": request.form.get('brand', '').lower(), "location": location.lower(), "ai_description": lost_ai_description, "image_path": search_filepath}
             print(f"\n--- Starting Match Process for {search_filename} ---")

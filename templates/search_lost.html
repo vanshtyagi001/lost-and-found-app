@@ -27,35 +27,34 @@
             </div>
 
             <div class="mb-3">
-                <label for="item_type" class="form-label fw-semibold">Item Type*</label>
+                <label for="item_type" class="form-label fw-semibold">Item Category*</label>
                 <select class="form-select" id="item_type" name="item_type" required>
-                    <option value="" disabled selected>Select item type...</option>
+                    <option value="" disabled selected>Select category...</option>
                     {% for type in item_types %}
                         <option value="{{ type }}">{{ type }}</option>
                     {% endfor %}
                 </select>
             </div>
 
-            <div class="row mb-3">
-                <div class="col-md-6">
-                    <label for="color" class="form-label fw-semibold">Color</label>
-                    <input type="text" class="form-control" id="color" name="color" placeholder="e.g., Black, Red, Gold">
-                </div>
-                <div class="col-md-6 mt-3 mt-md-0">
-                    <label for="brand" class="form-label fw-semibold">Brand (if applicable)</label>
-                    <input type="text" class="form-control" id="brand" name="brand" placeholder="e.g., Samsung, Fossil, Jansport">
-                </div>
+            <div class="mb-3">
+                <label for="location" class="form-label fw-semibold">Last Known Location*</label>
+                <input type="text" class="form-control" id="location" name="location" placeholder="e.g., Cafeteria or Main Library" required>
             </div>
 
             <div class="mb-3">
-                <label for="location" class="form-label fw-semibold">Last Known Location*</label>
-                <input type="text" class="form-control" id="location" name="location" placeholder="e.g., Main Street Cafe, City Bus Route 5" required>
+                <label for="description" class="form-label fw-semibold">Description / Identifying Marks (Optional)</label>
+                <textarea class="form-control" id="description" name="description" rows="2" placeholder="e.g., Black leather wallet with scratch on corner"></textarea>
             </div>
 
-            <div class="mb-4">
-                <label for="contact_info_search" class="form-label fw-semibold">Your Contact Information (Optional)</label>
-                <input type="text" class="form-control" id="contact_info_search" name="contact_info_search" placeholder="Optional: email@example.com">
-                <div class="form-text text-muted">Optional reference for your search session.</div>
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <label for="color" class="form-label fw-semibold">Color (Optional)</label>
+                    <input type="text" class="form-control" id="color" name="color" placeholder="e.g., Black, Red, Gold">
+                </div>
+                <div class="col-md-6 mt-3 mt-md-0">
+                    <label for="brand" class="form-label fw-semibold">Brand (Optional)</label>
+                    <input type="text" class="form-control" id="brand" name="brand" placeholder="e.g., Samsung, Fossil, Jansport">
+                </div>
             </div>
 
             <!-- Submit Button Area -->
