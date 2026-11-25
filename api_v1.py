@@ -48,6 +48,36 @@ def _verify_admin_token(token):
         return False
 
 
+def _verify_user_token(token):
+    try:
+        data = _get_serializer().loads(token, max_age=TOKEN_MAX_AGE_SECONDS)
+        if data.get("role") == "user" and data.get("user_id"):
+            return data["user_id"]
+        return None
+    except (BadSignature, SignatureExpired):
+        return None
+
+
+def api_user_required(f):
+    """Protects JSON user endpoints using Bearer token authentication."""
+
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Missing or invalid Authorization header."}), 401
+        token = auth_header.split(" ", 1)[1].strip()
+        user_id = _verify_user_token(token) if token else None
+        if not user_id:
+            return jsonify({"error": "Invalid or expired user token."}), 401
+        user = db.session.get(User, user_id)
+        if not user:
+            return jsonify({"error": "User not found."}), 401
+        return f(user, *args, **kwargs)
+
+    return decorated
+
+
 def api_admin_required(f):
     """Protects JSON admin endpoints using Bearer token authentication."""
 
@@ -343,6 +373,36 @@ def user_google_login():
     return jsonify({
         "token": token,
         "expires_in": TOKEN_MAX_AGE_SECONDS,
+        "user": user.to_dict(),
+    }), 200
+
+
+@api_v1.route("/auth/profile", methods=["GET", "PUT"])
+@api_user_required
+def user_profile_api(user):
+    """Fetches or updates the signed-in user's private profile details."""
+    if request.method == "GET":
+        return jsonify({"user": user.to_dict()}), 200
+
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    phone = (data.get("phone") or "").strip()
+    address = (data.get("address") or "").strip()
+    city = (data.get("city") or "").strip() or None
+    alternate_contact = (data.get("alternate_contact") or "").strip() or None
+
+    if not name or not phone or not address:
+        return jsonify({"error": "Name, mobile number, and stay address are required."}), 400
+
+    user.name = name
+    user.phone = phone
+    user.address = address
+    user.city = city
+    user.alternate_contact = alternate_contact
+    db.session.commit()
+
+    return jsonify({
+        "message": "Your profile has been saved securely.",
         "user": user.to_dict(),
     }), 200
 

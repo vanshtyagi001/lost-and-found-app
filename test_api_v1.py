@@ -405,6 +405,23 @@ def test_google_signin_api_and_web(client, monkeypatch):
     assert "https://lh3.googleusercontent.com/a/avatar.jpg" in web_html
     assert "Complete Your Profile" in web_html
 
+    # Update user profile via /api/v1/auth/profile
+    prof_resp = client.put(
+        "/api/v1/auth/profile",
+        headers={"Authorization": f"Bearer {data['token']}"},
+        json={
+            "name": "Google User Updated",
+            "phone": "+919876543210",
+            "address": "Hostel C, Room 12",
+            "city": "Noida",
+        },
+    )
+    assert prof_resp.status_code == 200
+    prof_user = prof_resp.get_json()["user"]
+    assert prof_user["profile_complete"] is True
+    assert prof_user["phone"] == "+919876543210"
+    assert prof_user["email"] == "googleuser@example.com"
+
 
 def test_cloudinary_upload_and_delete(client, monkeypatch):
     monkeypatch.setattr(services, "CLOUDINARY_URL", "cloudinary://key:secret@cloud")
