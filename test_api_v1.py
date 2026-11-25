@@ -47,7 +47,7 @@ def test_health_endpoint(client):
     data = resp.get_json()
     assert data["status"] == "ok"
     assert "Electronics" in data["item_types"]
-    assert data["thresholds"]["image"] == 0.80
+    assert data["thresholds"]["image"] == 0.70
 
 
 def test_report_found_and_list_items(client, monkeypatch):
@@ -283,3 +283,34 @@ def test_user_register_and_login(client):
     )
     assert login_resp.status_code == 200
     assert login_resp.get_json()["user"]["name"] == "Vansh Tyagi"
+
+
+def test_category_normalization_matches_legacy_and_android_labels(client, monkeypatch):
+    monkeypatch.setattr(api_v1, "generate_description_gemini", lambda path: "Brown leather wallet.")
+    monkeypatch.setattr(services, "compare_descriptions_gemini", lambda d1, d2: 0.85)
+    monkeypatch.setattr(services, "compare_images_gemini", lambda p1, p2: 0.75)
+
+    # Legacy web label 'Wallet/Purse'
+    client.post(
+        "/api/v1/report-found",
+        data={
+            "item_type": "Wallet/Purse",
+            "location": "North Gate",
+            "contact_info": "guard@example.com",
+            "item_image": (_make_jpeg_bytes(), "wallet.jpg"),
+        },
+        content_type="multipart/form-data",
+    )
+
+    # Unified Android label 'Keys & Wallet' with differently worded location
+    resp = client.post(
+        "/api/v1/search-lost",
+        data={
+            "item_type": "Keys & Wallet",
+            "location": "Campus Entrance",
+            "item_image": (_make_jpeg_bytes(), "lost_wallet.jpg"),
+        },
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 200
+    assert resp.get_json()["match_count"] == 1

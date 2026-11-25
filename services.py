@@ -147,8 +147,8 @@ def compare_images_gemini(image_path1, image_path2):
     try:
         if GEMINI_IMAGE_API_KEY and GEMINI_IMAGE_API_KEY != "YOUR API KEY":
             genai.configure(api_key=GEMINI_IMAGE_API_KEY)
-        img1 = optimize_image_for_ai(image_path1, max_dim=1024)
-        img2 = optimize_image_for_ai(image_path2, max_dim=1024)
+        img1 = optimize_image_for_ai(image_path1, max_dim=512)
+        img2 = optimize_image_for_ai(image_path2, max_dim=512)
         prompt = """
         On a scale of 0.0 to 1.0, how visually similar are the items in these two images?
         Respond ONLY with the numerical score (e.g., 0.90).
@@ -163,14 +163,41 @@ def compare_images_gemini(image_path1, image_path2):
         return 0.0
 
 
+_CATEGORY_ALIASES = {
+    "electronics": "electronics",
+    "keys": "keys_wallet",
+    "wallet/purse": "keys_wallet",
+    "keys & wallet": "keys_wallet",
+    "pet": "pets",
+    "pets": "pets",
+    "bag/backpack": "bags",
+    "bags & luggage": "bags",
+    "identification": "documents",
+    "book/notebook": "documents",
+    "documents": "documents",
+    "clothing": "clothing",
+    "jewelry/watch": "jewelry",
+    "jewelry & watch": "jewelry",
+    "other": "other",
+}
+
+
+def normalize_category(item_type):
+    """Maps legacy web categories and unified Android categories to canonical groups."""
+    key = (item_type or "").strip().lower()
+    return _CATEGORY_ALIASES.get(key, key)
+
+
 def calculate_metadata_similarity(item_meta1, item_meta2):
     """Calculates similarity based on item type, color, brand, and location."""
     score = 0.0
     max_possible_score = 0.0
 
-    # Item Type (Exact Match, High Weight)
+    # Item Type (Normalized Group Match, High Weight)
     max_possible_score += 1.5
-    if item_meta1.get("item_type") and item_meta1["item_type"] == item_meta2.get("item_type"):
+    cat1 = normalize_category(item_meta1.get("item_type"))
+    cat2 = normalize_category(item_meta2.get("item_type"))
+    if cat1 and cat1 == cat2:
         score += 1.5
 
     # Color (Partial Match)

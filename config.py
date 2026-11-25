@@ -28,8 +28,8 @@ ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
 
 # --- Matching Thresholds (Configurable via .env with fallback defaults) ---
 DESCRIPTION_SIMILARITY_THRESHOLD = float(os.environ.get("DESCRIPTION_SIMILARITY_THRESHOLD", 0.40))
-METADATA_SIMILARITY_THRESHOLD = float(os.environ.get("METADATA_SIMILARITY_THRESHOLD", 0.50))
-IMAGE_SIMILARITY_THRESHOLD = float(os.environ.get("IMAGE_SIMILARITY_THRESHOLD", 0.80))
+METADATA_SIMILARITY_THRESHOLD = float(os.environ.get("METADATA_SIMILARITY_THRESHOLD", 0.35))
+IMAGE_SIMILARITY_THRESHOLD = float(os.environ.get("IMAGE_SIMILARITY_THRESHOLD", 0.70))
 
 # --- Gemini Model Configuration ---
 GEMINI_MODEL_NAME = os.environ.get("GEMINI_MODEL_NAME", "gemini-3.1-flash-lite")
