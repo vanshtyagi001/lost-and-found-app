@@ -13,9 +13,10 @@ class Item(db.Model):
     image_filename = db.Column(db.String(500), nullable=False)
     ai_description = db.Column(db.Text, nullable=True)
     contact_info = db.Column(db.String(200), nullable=False) # WARNING: Store securely in real app
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True, index=True)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
-    def __init__(self, status=None, item_type=None, location=None, image_filename=None, contact_info=None, color=None, brand=None, ai_description=None, timestamp=None, **kwargs):
+    def __init__(self, status=None, item_type=None, location=None, image_filename=None, contact_info=None, color=None, brand=None, ai_description=None, user_id=None, timestamp=None, **kwargs):
         super().__init__(**kwargs)
         self.status = status
         self.item_type = item_type
@@ -25,6 +26,7 @@ class Item(db.Model):
         self.color = color
         self.brand = brand
         self.ai_description = ai_description
+        self.user_id = user_id
         if timestamp is not None:
             self.timestamp = timestamp
 
@@ -68,4 +70,30 @@ class User(db.Model):
             "city": self.city,
             "alternate_contact": self.alternate_contact,
             "profile_complete": self.is_profile_complete,
+        }
+
+
+class Notification(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    found_item_id = db.Column(db.Integer, db.ForeignKey("item.id"), nullable=True)
+    lost_item_id = db.Column(db.Integer, db.ForeignKey("item.id"), nullable=True)
+    title = db.Column(db.String(200), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    confidence = db.Column(db.Float, nullable=True)
+    is_read = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self, found_item=None):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "found_item_id": self.found_item_id,
+            "lost_item_id": self.lost_item_id,
+            "title": self.title,
+            "message": self.message,
+            "confidence": self.confidence,
+            "is_read": self.is_read,
+            "created_at": self.created_at.isoformat() + "Z" if self.created_at else None,
+            "found_item": found_item,
         }

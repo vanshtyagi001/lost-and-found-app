@@ -268,12 +268,12 @@ def save_uploaded_image(file_storage, upload_folder, prefix="found"):
     return filename, filepath
 
 
-def save_found_image(file_storage, upload_folder):
+def save_found_image(file_storage, upload_folder, prefix="found"):
     """
-    Saves a found-item photo to Cloudinary (if CLOUDINARY_URL is configured) or local disk.
+    Saves an item photo to Cloudinary (if CLOUDINARY_URL is configured) or local disk.
     Returns (stored_ref, local_filepath, is_temp_local).
     """
-    filename, filepath = save_uploaded_image(file_storage, upload_folder, prefix="found")
+    filename, filepath = save_uploaded_image(file_storage, upload_folder, prefix=prefix)
     if CLOUDINARY_URL:
         result = cloudinary.uploader.upload(
             filepath,
@@ -329,19 +329,19 @@ def delete_item_image(image_filename, upload_folder):
     return False
 
 
-def find_matching_found_items(lost_item_details, upload_folder):
+def _find_matching_items(query_details, upload_folder, target_status="found"):
     """
-    Runs the three-tier matching pipeline against all 'found' items in the DB.
+    Runs the three-tier matching pipeline against all items with status == target_status.
     Returns a list of match dicts sorted by confidence descending.
     """
-    found_items = Item.query.filter_by(status="found").all()
+    candidates = Item.query.filter_by(status=target_status).all()
     matches = []
 
-    for found_item in found_items:
+    for candidate in candidates:
         match_scores = {"description": 0.0, "metadata": 0.0, "image": 0.0, "confidence": 0.0}
 
         # Tier 1: Metadata Heuristics (0 API calls)
-        meta_similarity = calculate_metadata_similarity(lost_item_details, found_item.get_metadata())
+        meta_similarity = calculate_metadata_similarity(query_details, candidate.get_metadata())
         match_scores["metadata"] = round(meta_similarity, 4)
         if meta_similarity < METADATA_SIMILARITY_THRESHOLD:
             continue
@@ -349,26 +349,26 @@ def find_matching_found_items(lost_item_details, upload_folder):
         # Tier 2: Semantic Description Similarity (Gemini Text)
         desc_similarity = 0.0
         if (
-            lost_item_details.get("ai_description")
-            and found_item.ai_description
-            and "failed" not in found_item.ai_description.lower()
+            query_details.get("ai_description")
+            and candidate.ai_description
+            and "failed" not in candidate.ai_description.lower()
         ):
             desc_similarity = compare_descriptions_gemini(
-                lost_item_details["ai_description"], found_item.ai_description
+                query_details["ai_description"], candidate.ai_description
             )
             match_scores["description"] = round(desc_similarity, 4)
 
         if desc_similarity < DESCRIPTION_SIMILARITY_THRESHOLD:
             continue
 
-        # Tier 3: Direct Visual Similarity (Gemini Vision) — only when a search image is provided
-        if lost_item_details.get("image_path"):
+        # Tier 3: Direct Visual Similarity (Gemini Vision) — only when a query image is provided
+        if query_details.get("image_path"):
             img_similarity = 0.0
-            found_image_source = resolve_image_source(found_item.image_filename, upload_folder)
-            if found_image_source and (
-                found_image_source.startswith(("http://", "https://")) or os.path.exists(found_image_source)
+            candidate_image_source = resolve_image_source(candidate.image_filename, upload_folder)
+            if candidate_image_source and (
+                candidate_image_source.startswith(("http://", "https://")) or os.path.exists(candidate_image_source)
             ):
-                img_similarity = compare_images_gemini(lost_item_details["image_path"], found_image_source)
+                img_similarity = compare_images_gemini(query_details["image_path"], candidate_image_source)
                 match_scores["image"] = round(img_similarity, 4)
 
             if img_similarity < IMAGE_SIMILARITY_THRESHOLD:
@@ -382,13 +382,24 @@ def find_matching_found_items(lost_item_details, upload_folder):
             confidence = (desc_similarity * 0.65) + (meta_similarity * 0.35)
         match_scores["confidence"] = round(confidence, 4)
         matches.append({
-            "found_item": found_item,
+            "found_item": candidate,
+            "matched_item": candidate,
             "scores": match_scores,
             "confidence": round(confidence, 4),
         })
 
     matches.sort(key=lambda x: x["confidence"], reverse=True)
     return matches
+
+
+def find_matching_found_items(lost_item_details, upload_folder):
+    """Runs the three-tier matching pipeline against all 'found' items in the DB."""
+    return _find_matching_items(lost_item_details, upload_folder, target_status="found")
+
+
+def find_matching_lost_items(found_item_details, upload_folder):
+    """Runs the three-tier matching pipeline against all 'lost' items in the DB."""
+    return _find_matching_items(found_item_details, upload_folder, target_status="lost")
 
 
 def item_to_dict(item, image_url=None):

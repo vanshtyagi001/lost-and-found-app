@@ -12,12 +12,13 @@ from config import (
     IMAGE_SIMILARITY_THRESHOLD,
     METADATA_SIMILARITY_THRESHOLD,
 )
-from models import Item, User, db
+from models import Item, Notification, User, db
 from services import (
     ITEM_TYPES,
     allowed_file,
     delete_item_image,
     find_matching_found_items,
+    find_matching_lost_items,
     generate_description_gemini,
     get_or_create_google_user,
     item_to_dict,
@@ -56,6 +57,16 @@ def _verify_user_token(token):
         return None
     except (BadSignature, SignatureExpired):
         return None
+
+
+def _get_optional_user():
+    """Returns the authenticated User if a valid Bearer token is provided, else None."""
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return None
+    token = auth_header.split(" ", 1)[1].strip()
+    user_id = _verify_user_token(token) if token else None
+    return db.session.get(User, user_id) if user_id else None
 
 
 def api_user_required(f):
@@ -194,6 +205,7 @@ def report_found():
             else:
                 ai_description = f"{ai_description}\n\nFinder notes: {user_description}"
 
+        current_user = _get_optional_user()
         new_item = Item(
             status="found",
             item_type=item_type,
@@ -203,14 +215,59 @@ def report_found():
             image_filename=stored_ref,
             ai_description=ai_description,
             contact_info=contact_info,
+            user_id=current_user.id if current_user else None,
         )
         db.session.add(new_item)
         db.session.commit()
+
+        # Check if this newly found item matches any previously reported lost items
+        found_item_details = {
+            "item_type": item_type.lower(),
+            "color": (color or "").lower(),
+            "brand": (brand or "").lower(),
+            "location": location.lower(),
+            "ai_description": ai_description,
+            "image_path": filepath,
+        }
+        lost_matches = find_matching_lost_items(found_item_details, upload_folder)
+        serialized_lost_matches = []
+        item_label = f"{brand} {item_type}".strip() if brand else item_type
+
+        for m in lost_matches:
+            lost_item = m["matched_item"]
+            serialized_lost_matches.append({
+                "confidence": m["confidence"],
+                "scores": m["scores"],
+                "item": item_to_dict(
+                    lost_item,
+                    _build_image_url(lost_item.image_filename),
+                ),
+            })
+            if lost_item.user_id:
+                confidence_pct = round(m["confidence"] * 100)
+                notif = Notification(
+                    user_id=lost_item.user_id,
+                    found_item_id=new_item.id,
+                    lost_item_id=lost_item.id,
+                    title=f"Possible Match Found: {item_label}",
+                    message=(
+                        f"Great news! A {item_label} matching your lost report was just "
+                        f"found near {location} ({confidence_pct}% match). "
+                        f"Tap to view details and contact the finder."
+                    ),
+                    confidence=m["confidence"],
+                )
+                db.session.add(notif)
+
+        if lost_matches:
+            db.session.commit()
 
         return jsonify({
             "message": "Found item reported successfully.",
             "ai_warning": ai_warning,
             "item": item_to_dict(new_item, _build_image_url(new_item.image_filename)),
+            "lost_match_count": len(serialized_lost_matches),
+            "lost_matches": serialized_lost_matches,
         }), 201
     except Exception as e:
         db.session.rollback()
@@ -243,14 +300,22 @@ def search_lost():
     color = (request.form.get("color") or "").strip().lower()
     brand = (request.form.get("brand") or "").strip().lower()
     user_description = (request.form.get("description") or "").strip()
+    current_user = _get_optional_user()
+    contact_info = (request.form.get("contact_info") or "").strip()
+    if not contact_info and current_user:
+        contact_info = (current_user.phone or current_user.email or "").strip()
+    if not contact_info:
+        contact_info = "Not provided"
 
     if not all([item_type, location]):
         return jsonify({"error": "item_type and location are required."}), 400
 
     search_filepath = None
+    stored_ref = None
+    is_temp_local = False
     try:
         upload_folder = current_app.config["UPLOAD_FOLDER"]
-        _, search_filepath = save_uploaded_image(file, upload_folder, prefix="search")
+        stored_ref, search_filepath, is_temp_local = save_found_image(file, upload_folder, prefix="lost")
         lost_ai_description = generate_description_gemini(search_filepath)
         ai_warning = None
         if lost_ai_description.startswith("Error:"):
@@ -263,6 +328,20 @@ def search_lost():
                 if lost_ai_description
                 else user_description
             )
+
+        lost_item = Item(
+            status="lost",
+            item_type=item_type,
+            color=color or None,
+            brand=brand or None,
+            location=location,
+            image_filename=stored_ref,
+            ai_description=lost_ai_description or None,
+            contact_info=contact_info,
+            user_id=current_user.id if current_user else None,
+        )
+        db.session.add(lost_item)
+        db.session.commit()
 
         lost_item_details = {
             "item_type": item_type.lower(),
@@ -292,11 +371,15 @@ def search_lost():
             "ai_warning": ai_warning,
             "match_count": len(serialized_matches),
             "matches": serialized_matches,
+            "lost_item": item_to_dict(lost_item, _build_image_url(lost_item.image_filename)),
         }), 200
     except Exception as e:
+        db.session.rollback()
+        if stored_ref:
+            delete_item_image(stored_ref, current_app.config["UPLOAD_FOLDER"])
         return jsonify({"error": f"Search failed: {e}"}), 500
     finally:
-        if search_filepath and os.path.exists(search_filepath):
+        if is_temp_local and search_filepath and os.path.exists(search_filepath):
             try:
                 os.remove(search_filepath)
             except OSError:
@@ -432,7 +515,9 @@ def admin_delete_item(item_id):
 
     try:
         delete_item_image(item.image_filename, current_app.config["UPLOAD_FOLDER"])
-
+        Notification.query.filter(
+            (Notification.found_item_id == item.id) | (Notification.lost_item_id == item.id)
+        ).delete(synchronize_session=False)
         db.session.delete(item)
         db.session.commit()
         return jsonify({"message": f"Item #{item_id} deleted successfully."}), 200
@@ -454,6 +539,7 @@ def admin_clear_all():
             if delete_item_image(item.image_filename, upload_folder):
                 deleted_files_count += 1
 
+        Notification.query.delete()
         num_deleted = Item.query.delete()
         db.session.commit()
         return jsonify({
@@ -464,3 +550,48 @@ def admin_clear_all():
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": f"Error clearing database: {e}"}), 500
+
+
+@api_v1.route("/notifications", methods=["GET"])
+@api_user_required
+def list_notifications(user):
+    """Returns match notifications for the authenticated user, newest first."""
+    notifs = (
+        Notification.query.filter_by(user_id=user.id)
+        .order_by(Notification.created_at.desc(), Notification.id.desc())
+        .limit(50)
+        .all()
+    )
+    found_ids = {n.found_item_id for n in notifs if n.found_item_id}
+    found_map = {}
+    if found_ids:
+        for item in Item.query.filter(Item.id.in_(found_ids)).all():
+            found_map[item.id] = item_to_dict(item, _build_image_url(item.image_filename))
+
+    serialized = [n.to_dict(found_item=found_map.get(n.found_item_id)) for n in notifs]
+    unread_count = sum(1 for n in notifs if not n.is_read)
+    return jsonify({
+        "notifications": serialized,
+        "unread_count": unread_count,
+    }), 200
+
+
+@api_v1.route("/notifications/<int:notif_id>/read", methods=["POST"])
+@api_user_required
+def mark_notification_read(user, notif_id):
+    """Marks a single notification as read for the authenticated user."""
+    notif = Notification.query.filter_by(id=notif_id, user_id=user.id).first()
+    if not notif:
+        return jsonify({"error": "Notification not found."}), 404
+    notif.is_read = True
+    db.session.commit()
+    return jsonify({"message": "Notification marked as read."}), 200
+
+
+@api_v1.route("/notifications/read-all", methods=["POST"])
+@api_user_required
+def mark_all_notifications_read(user):
+    """Marks all notifications as read for the authenticated user."""
+    Notification.query.filter_by(user_id=user.id, is_read=False).update({"is_read": True})
+    db.session.commit()
+    return jsonify({"message": "All notifications marked as read."}), 200

@@ -58,23 +58,29 @@ except Exception as e:
     exit()
 
 def _ensure_user_profile_columns():
-    """Safely adds new User profile columns if running against an existing database."""
+    """Safely adds new schema columns if running against an existing database."""
     from sqlalchemy import inspect, text
 
     inspector = inspect(db.engine)
-    if "user" not in inspector.get_table_names():
-        return
-    existing = {col["name"] for col in inspector.get_columns("user")}
-    new_cols = {
-        "avatar_url": "VARCHAR(500)",
-        "phone": "VARCHAR(30)",
-        "address": "VARCHAR(300)",
-        "city": "VARCHAR(100)",
-        "alternate_contact": "VARCHAR(150)",
-    }
-    for col_name, col_type in new_cols.items():
-        if col_name not in existing:
-            db.session.execute(text(f'ALTER TABLE "user" ADD COLUMN {col_name} {col_type}'))
+    table_names = set(inspector.get_table_names())
+    if "user" in table_names:
+        existing = {col["name"] for col in inspector.get_columns("user")}
+        new_cols = {
+            "avatar_url": "VARCHAR(500)",
+            "phone": "VARCHAR(30)",
+            "address": "VARCHAR(300)",
+            "city": "VARCHAR(100)",
+            "alternate_contact": "VARCHAR(150)",
+        }
+        for col_name, col_type in new_cols.items():
+            if col_name not in existing:
+                db.session.execute(text(f'ALTER TABLE "user" ADD COLUMN {col_name} {col_type}'))
+
+    if "item" in table_names:
+        existing_item_cols = {col["name"] for col in inspector.get_columns("item")}
+        if "user_id" not in existing_item_cols:
+            db.session.execute(text('ALTER TABLE item ADD COLUMN user_id INTEGER REFERENCES "user"(id)'))
+
     db.session.commit()
 
 

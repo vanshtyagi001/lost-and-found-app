@@ -150,9 +150,10 @@ def test_search_lost_three_tier_match_and_cleanup(client, monkeypatch):
     assert data["matches"][0]["confidence"] > 0.85
     assert data["matches"][0]["item"]["contact_info"] == "desk@example.com"
 
-    # Temporary search image must be deleted, leaving only the found item image
+    # Both the found item image and the stored lost item image should be present
     upload_files = os.listdir(app.config["UPLOAD_FOLDER"])
-    assert len(upload_files) == 1
+    assert len(upload_files) == 2
+    assert data["lost_item"]["status"] == "lost"
     assert upload_files[0].startswith("found_")
 
 
@@ -467,3 +468,77 @@ def test_cloudinary_upload_and_delete(client, monkeypatch):
     )
     assert del_resp.status_code == 200
     assert destroyed == ["lost_and_found/umbrella"]
+
+
+def test_lost_report_reverse_match_and_notification(client, monkeypatch):
+    monkeypatch.setattr(
+        api_v1,
+        "generate_description_gemini",
+        lambda path: "Black wireless mouse with RGB scroll wheel.",
+    )
+    monkeypatch.setattr(services, "compare_descriptions_gemini", lambda d1, d2: 0.91)
+    monkeypatch.setattr(services, "compare_images_gemini", lambda p1, p2: 0.93)
+
+    # 1. User A registers and reports/searches a lost item
+    reg = client.post(
+        "/api/v1/auth/register",
+        json={"name": "Alice", "email": "alice@example.com", "password": "password123"},
+    )
+    assert reg.status_code == 201
+    alice_token = reg.get_json()["token"]
+
+    lost_resp = client.post(
+        "/api/v1/search-lost",
+        headers={"Authorization": f"Bearer {alice_token}"},
+        data={
+            "item_type": "Electronics",
+            "color": "Black",
+            "brand": "Zebronics",
+            "location": "Block 28",
+            "item_image": (_make_jpeg_bytes((20, 20, 20)), "lost_mouse.jpg"),
+        },
+        content_type="multipart/form-data",
+    )
+    assert lost_resp.status_code == 200
+    assert lost_resp.get_json()["lost_item"]["status"] == "lost"
+
+    # 2. User B reports a matching found item
+    found_resp = client.post(
+        "/api/v1/report-found",
+        data={
+            "item_type": "Electronics",
+            "color": "Black",
+            "brand": "Zebronics",
+            "location": "Block 28",
+            "contact_info": "+919876543210",
+            "item_image": (_make_jpeg_bytes((25, 25, 25)), "found_mouse.jpg"),
+        },
+        content_type="multipart/form-data",
+    )
+    assert found_resp.status_code == 201
+    found_data = found_resp.get_json()
+    assert found_data["lost_match_count"] == 1
+
+    # 3. User A receives an unread match notification with the found item embedded
+    notif_resp = client.get(
+        "/api/v1/notifications",
+        headers={"Authorization": f"Bearer {alice_token}"},
+    )
+    assert notif_resp.status_code == 200
+    notif_data = notif_resp.get_json()
+    assert notif_data["unread_count"] == 1
+    notif = notif_data["notifications"][0]
+    assert "Match Found" in notif["title"]
+    assert notif["found_item"]["contact_info"] == "+919876543210"
+
+    # 4. Mark notification as read
+    read_resp = client.post(
+        f"/api/v1/notifications/{notif['id']}/read",
+        headers={"Authorization": f"Bearer {alice_token}"},
+    )
+    assert read_resp.status_code == 200
+    after_resp = client.get(
+        "/api/v1/notifications",
+        headers={"Authorization": f"Bearer {alice_token}"},
+    )
+    assert after_resp.get_json()["unread_count"] == 0
