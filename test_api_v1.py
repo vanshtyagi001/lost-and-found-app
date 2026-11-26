@@ -500,7 +500,9 @@ def test_lost_report_reverse_match_and_notification(client, monkeypatch):
         content_type="multipart/form-data",
     )
     assert lost_resp.status_code == 200
-    assert lost_resp.get_json()["lost_item"]["status"] == "lost"
+    lost_item = lost_resp.get_json()["lost_item"]
+    assert lost_item["status"] == "lost"
+    assert lost_item["reference_id"].startswith("LST-")
 
     # 2. User B reports a matching found item
     found_resp = client.post(
@@ -517,6 +519,7 @@ def test_lost_report_reverse_match_and_notification(client, monkeypatch):
     )
     assert found_resp.status_code == 201
     found_data = found_resp.get_json()
+    assert found_data["item"]["reference_id"].startswith("FND-")
     assert found_data["lost_match_count"] == 1
 
     # 3. User A receives an unread match notification with the found item embedded

@@ -406,6 +406,7 @@ def item_to_dict(item, image_url=None):
     """Serializes an Item model instance to a JSON-compatible dict."""
     return {
         "id": item.id,
+        "reference_id": item.reference_id,
         "status": item.status,
         "item_type": item.item_type,
         "color": item.color,

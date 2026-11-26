@@ -80,8 +80,19 @@ def _ensure_user_profile_columns():
         existing_item_cols = {col["name"] for col in inspector.get_columns("item")}
         if "user_id" not in existing_item_cols:
             db.session.execute(text('ALTER TABLE item ADD COLUMN user_id INTEGER REFERENCES "user"(id)'))
+        if "reference_id" not in existing_item_cols:
+            db.session.execute(text('ALTER TABLE item ADD COLUMN reference_id VARCHAR(32)'))
+            db.session.execute(text('CREATE UNIQUE INDEX IF NOT EXISTS ix_item_reference_id ON item (reference_id)'))
 
     db.session.commit()
+
+    # Backfill reference_id for any legacy items
+    from models import Item, generate_item_reference_id
+    missing_refs = Item.query.filter(Item.reference_id.is_(None)).all()
+    if missing_refs:
+        for legacy_item in missing_refs:
+            legacy_item.reference_id = generate_item_reference_id(legacy_item.status)
+        db.session.commit()
 
 
 # Initialize SQLAlchemy

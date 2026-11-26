@@ -1,10 +1,23 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
+import secrets
 
 db = SQLAlchemy()
 
+_REF_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+def generate_item_reference_id(status):
+    """Generates an industry-standard prefixed reference ID (LST-YYYYMMDD-XXXXXX / FND-YYYYMMDD-XXXXXX)."""
+    prefix = "LST" if (status or "").strip().lower() == "lost" else "FND"
+    date_part = datetime.utcnow().strftime("%Y%m%d")
+    rand_part = "".join(secrets.choice(_REF_ALPHABET) for _ in range(6))
+    return f"{prefix}-{date_part}-{rand_part}"
+
+
 class Item(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    reference_id = db.Column(db.String(32), unique=True, nullable=True, index=True)
     status = db.Column(db.String(10), nullable=False) # 'lost' or 'found'
     item_type = db.Column(db.String(100), nullable=False)
     color = db.Column(db.String(50), nullable=True)
@@ -16,7 +29,7 @@ class Item(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True, index=True)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
-    def __init__(self, status=None, item_type=None, location=None, image_filename=None, contact_info=None, color=None, brand=None, ai_description=None, user_id=None, timestamp=None, **kwargs):
+    def __init__(self, status=None, item_type=None, location=None, image_filename=None, contact_info=None, color=None, brand=None, ai_description=None, user_id=None, reference_id=None, timestamp=None, **kwargs):
         super().__init__(**kwargs)
         self.status = status
         self.item_type = item_type
@@ -27,6 +40,7 @@ class Item(db.Model):
         self.brand = brand
         self.ai_description = ai_description
         self.user_id = user_id
+        self.reference_id = reference_id or generate_item_reference_id(status)
         if timestamp is not None:
             self.timestamp = timestamp
 
